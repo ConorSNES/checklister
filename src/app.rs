@@ -4,17 +4,26 @@ use model::{Entry, EntryHost, EntrySwitch, Model};
 use serde::{Deserialize, Serialize};
 mod model;
 
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(PartialEq)]
 enum CurrentDialog {
     None,
+    // Originally (and ideally), we use references to represent the target. This resulted in lifetime complications, so we use a (slightly more expensive) index based method now.
     Create(Option<Vec<usize>>, String),
     Edit(Vec<usize>),
+}
+
+// pretty simple current dialog
+impl Default for CurrentDialog {
+    fn default() -> Self {
+        Self::None
+    }
 }
 
 // declaration of the application
 #[derive(Serialize, Deserialize)]
 pub struct App {
     data: Model,
+    #[serde(skip)]
     dialog: CurrentDialog,
 }
 

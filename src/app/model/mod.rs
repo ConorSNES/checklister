@@ -84,14 +84,14 @@ pub struct Model {
 }
 
 // Used to describe the switch of entries.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq)]
 pub enum EntrySwitch {
     End(EntryEnd),
     Host(EntryHost),
 }
 
 // An entry contains either an array of entries or the main entry data.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq)]
 pub struct Entry {
     pub title: String,
     pub data: EntrySwitch,
@@ -110,7 +110,7 @@ impl Entry {
         }
     }
 
-	// currently dead- need a menu to add a host
+    // currently dead- need a menu to add a host
     pub fn _new_host(title: String) -> Self {
         Entry {
             title: title,
@@ -120,17 +120,17 @@ impl Entry {
         }
     }
 
-	// Collects added date of Entry, regardless of it being a Host or End.
-	pub fn added(&self) -> NaiveDateTime {
-		match &self.data {
-			EntrySwitch::End(v) => v.added,
-			EntrySwitch::Host(v) => v.date()
-		}
-	}
+    // Collects added date of Entry, regardless of it being a Host or End.
+    pub fn added(&self) -> NaiveDateTime {
+        match &self.data {
+            EntrySwitch::End(v) => v.added,
+            EntrySwitch::Host(v) => v.date(),
+        }
+    }
 }
 
 // The main content of an entry.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq)]
 pub struct EntryEnd {
     pub body: String,
     pub added: NaiveDateTime,
@@ -138,7 +138,7 @@ pub struct EntryEnd {
 }
 
 // An array of entries.
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, PartialEq)]
 pub struct EntryHost {
     pub subelements: Vec<Entry>,
 }
@@ -154,43 +154,51 @@ impl EntryHost {
         // If this is the most shallow the index goes, return the current item.
         if index.len() == 1 {
             &mut self.subelements[index[0]]
-        } 
-		// If this is not, try and access the deeper one
-		else {
-            match &mut self.subelements[index[0]].data {
-                EntrySwitch::End(_) => panic!("Entryhost deepget ended early! Index: {:#?}", index),
-                // Otherwise, go recursive
-                EntrySwitch::Host(v) => v.deepget(&index[1..]),
-            }
+        }
+        // If this is not, try and access the deeper one
+        else {
+            let EntrySwitch::Host(v) = &mut self.subelements[index[0]].data else {
+                panic!("Entryhost deepget ended early! Index: {:#?}", index);
+            };
+			// Perform recursive deepget with slice excluding current index
+            v.deepget(&index[1..])
         }
     }
 
-	// Collect newest date of host
-	pub fn date(&self) -> NaiveDateTime {
-		// basically a max aggregator for one class value, with some fanangling
-		let mut max = NaiveDateTime::MIN;
-		for v in &self.subelements {
-			max = NaiveDateTime::max(max, v.added());
-		};
-		max
-	}
+    // Collect newest date of host
+    pub fn date(&self) -> NaiveDateTime {
+        // basically a max aggregator for one class value, with some fanangling
+        let mut max = NaiveDateTime::MIN;
+        for v in &self.subelements {
+            max = NaiveDateTime::max(max, v.added());
+        }
+        max
+    }
 
-	// Collect newest completed date of host
-	// (it's a little more nuanced than that, but that covers the basic idea)
-	// unf todo
+    // Collect newest completed date of host
+    // (it's a little more nuanced than that, but that covers the basic idea)
+    // unf todo
 
-	// Recursive sort for entryhost contents
-	pub fn sort(&mut self) {
-		// Sort the internals if we're able
-		for v in &mut self.subelements {
-			if let EntrySwitch::Host(w) = &mut v.data { w.sort(); }
-		}
-		// Now sort this entry
-		self.subelements.sort_by(|subj1, subj2| { 
-			let s1date = subj1.added();
-			let s2date = subj2.added();
-			if s1date == s2date { return Ordering::Equal };
-			return if !(s1date < s2date) { Ordering::Less } else { Ordering::Greater }
-		});
-	}
+    // Recursive sort for entryhost contents
+    pub fn sort(&mut self) {
+        // Sort the internals if we're able
+        for v in &mut self.subelements {
+            if let EntrySwitch::Host(w) = &mut v.data {
+                w.sort();
+            }
+        }
+        // Now sort this entry
+        self.subelements.sort_by(|subj1, subj2| {
+            let s1date = subj1.added();
+            let s2date = subj2.added();
+            if s1date == s2date {
+                return Ordering::Equal;
+            };
+            return if !(s1date < s2date) {
+                Ordering::Less
+            } else {
+                Ordering::Greater
+            };
+        });
+    }
 }
