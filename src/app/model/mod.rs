@@ -84,14 +84,14 @@ pub struct Model {
 }
 
 // Used to describe the switch of entries.
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub enum EntrySwitch {
     End(EntryEnd),
     Host(EntryHost),
 }
 
 // An entry contains either an array of entries or the main entry data.
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct Entry {
     pub title: String,
     pub data: EntrySwitch,
@@ -129,7 +129,7 @@ impl Entry {
 }
 
 // The main content of an entry.
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct EntryEnd {
     pub body: String,
     pub added: NaiveDateTime,
@@ -147,7 +147,7 @@ impl EntryEnd {
 }
 
 // An array of entries.
-#[derive(Serialize, Deserialize, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Default, PartialEq, Debug)]
 pub struct EntryHost {
     pub subelements: Vec<Entry>,
 }
@@ -209,5 +209,25 @@ impl EntryHost {
                 Ordering::Greater
             };
         });
+    }
+
+    // Clean the completed entries within this host
+    pub fn cleanup(&mut self) {
+        // Iteration is done in reverse order to account for shrinking array.
+        for i in (0..self.subelements.len()).rev() {
+            match &mut self.subelements[i].data {
+                EntrySwitch::Host(w) => {
+                    w.cleanup();
+                    if w.subelements.len() == 0 {
+                        self.subelements.remove(i);
+                    }
+                }
+                EntrySwitch::End(w) => {
+                    if w.completed != None {
+                        self.subelements.remove(i);
+                    }
+                }
+            }
+        }
     }
 }

@@ -454,8 +454,9 @@ impl App {
                         }
                     }
                 };
+				let titlefilter = (if title == "" {Self::TASK_NAME_DEFAULT} else {title}).to_string();
                 host.subelements
-                    .push(Entry::new_end(title.to_string(), "".to_string()));
+                    .push(Entry::new_end(titlefilter, "".to_string()));
                 host.sort();
                 self.closedialog();
             }
@@ -534,9 +535,17 @@ impl eframe::App for App {
             ui.horizontal_centered(|ui| {
                 // Wrap these elements in a panel for improved layout
                 Frame::new().inner_margin(4.0).show(ui, |ui| {
-                    if ui.button("Table view").clicked() {
-                        // I don't know what this is going to do
-                    }
+					// Add navigation buttons.
+					{
+						// This will have a dropdown eventually
+						let _ = ui.button("File");
+					}
+
+					if ui.button("Cleanup").clicked() {
+						self.data.entry.cleanup();
+					}
+
+
                     ui.with_layout(Layout::right_to_left(egui::Align::Min), |ui| {
                         let popupid = Id::new("addbuttonID");
                         let addbutton = ui.add_sized((20.0, 20.0), Button::new("+"));
@@ -571,11 +580,15 @@ impl eframe::App for App {
             });
         });
 
+        // Show current edit modal, if one is present
+        if self.action != CurrentAct::None {
+            egui::TopBottomPanel::bottom("info").show(ctx, |ui| {
+                self.dialogview(ui);
+            });
+        }
+
         // construct body
         egui::CentralPanel::default().show(ctx, |ui| {
-            // Show current edit modal
-            self.dialogview(ui);
-
             // Show all tasks
             self.tableview(ui);
         });
