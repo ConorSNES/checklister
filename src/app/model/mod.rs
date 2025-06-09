@@ -110,8 +110,7 @@ impl Entry {
         }
     }
 
-    // currently dead- need a menu to add a host
-    pub fn _new_host(title: String) -> Self {
+    pub fn new_host(title: String) -> Self {
         Entry {
             title: title,
             data: EntrySwitch::Host(EntryHost {
@@ -137,6 +136,16 @@ pub struct EntryEnd {
     pub completed: Option<NaiveDateTime>,
 }
 
+impl EntryEnd {
+    // Toggle completed state.
+    pub fn toggle(&mut self) {
+        self.completed = match self.completed {
+            None => Some(Local::now().naive_local()),
+            Some(_) => None,
+        };
+    }
+}
+
 // An array of entries.
 #[derive(Serialize, Deserialize, Default, PartialEq)]
 pub struct EntryHost {
@@ -160,7 +169,7 @@ impl EntryHost {
             let EntrySwitch::Host(v) = &mut self.subelements[index[0]].data else {
                 panic!("Entryhost deepget ended early! Index: {:#?}", index);
             };
-			// Perform recursive deepget with slice excluding current index
+            // Perform recursive deepget with slice excluding current index
             v.deepget(&index[1..])
         }
     }
