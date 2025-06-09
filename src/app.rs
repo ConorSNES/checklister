@@ -14,7 +14,7 @@ enum CurrentAct {
     None,
     // Originally (and ideally), we use references to represent the target. This resulted in lifetime complications, so we use a (slightly more expensive) index based method now.
     Create(Option<Vec<usize>>, String),
-	CreateHost(Option<Vec<usize>>, String),
+    CreateHost(Option<Vec<usize>>, String),
     Edit(Vec<usize>),
     Remove(Vec<usize>),
 }
@@ -62,14 +62,20 @@ impl App {
                     self.action = newact;
                 };
 
-                // Draw footer in small text.
-                ui.horizontal(|ui| {
-                    ui.add_space(8.0);
-                    ui.label(
-                        RichText::new(format!("{0}/{1} completed", result.0, result.1 + result.0))
+                // Draw footer in small text if there's something to show.
+                if result.0 + result.1 >= 8 {
+                    ui.horizontal(|ui| {
+                        ui.add_space(8.0);
+                        ui.label(
+                            RichText::new(format!(
+                                "{0}/{1} completed",
+                                result.0,
+                                result.1 + result.0
+                            ))
                             .weak(),
-                    );
-                });
+                        );
+                    });
+                }
             })
         });
     }
@@ -83,12 +89,10 @@ impl App {
     ) -> (usize, usize, Option<CurrentAct>) {
         let mut o = (0, 0, None);
 
-		// If there are no subelements, show the placeholder.
-		if subject.subelements.len() == 0 {
-			ui.vertical_centered(|ui| {
-				ui.label("No content.")
-			});
-		}
+        // If there are no subelements, show the placeholder.
+        if subject.subelements.len() == 0 {
+            ui.vertical_centered(|ui| ui.label(RichText::new("No content.").italics()));
+        }
         for i in 0..subject.subelements.len() {
             // Collect the nested subject
             let subsubject = &mut subject.subelements[i];
@@ -157,8 +161,7 @@ impl App {
             },
             |ui| {
                 // Add edit button.
-                // TODO, get the popup working (example references "Popup" struct that doesn't exist??)
-                // solved. egui release was **too new**. detailled popup tech gets added 1.32
+                // online egui release was **too new**. detailled popup tech gets added 1.32
 
                 let popupid = Id::new(index.clone());
 
@@ -167,12 +170,7 @@ impl App {
                     Button::new(RichText::new("...").weak()).fill(Color32::TRANSPARENT),
                 );
 
-                if menuresp.clicked() {
-                    // Open the edit menu upon clicking
-                    acts.1 = Some(CurrentAct::Edit(index.clone()));
-                }
-
-                if menuresp.secondary_clicked() {
+                if menuresp.clicked() | menuresp.secondary_clicked() {
                     // Raise the popup upon right clicking
                     togglepopup(ui, popupid);
                 }
@@ -249,13 +247,45 @@ impl App {
                                     }
                                 },
                                 |ui| {
-                                    if ui.add_sized((20.0, 20.0), Button::new("+")).clicked() {
+                                    let popupid = Id::new(index.clone());
+
+                                    let addbutton = ui.add_sized((20.0, 20.0), Button::new("+"));
+
+                                    if addbutton.clicked() {
                                         // Raise add entry dialog on this entry host
                                         actions.1 = Some(CurrentAct::Create(
                                             Some(index.clone()),
                                             String::new(),
                                         ));
                                     }
+
+                                    if addbutton.secondary_clicked() {
+                                        // Raise popup menu for adding items
+                                        togglepopup(ui, popupid);
+                                    }
+
+                                    // Create popup
+                                    popup_below_widget(
+                                        ui,
+                                        popupid,
+                                        &addbutton,
+                                        egui::PopupCloseBehavior::CloseOnClick,
+                                        |ui| {
+                                            ui.set_min_width(128.0);
+                                            if ui.button("Add subtask").clicked() {
+                                                actions.1 = Some(CurrentAct::Create(
+                                                    Some(index.clone()),
+                                                    String::new(),
+                                                ));
+                                            }
+                                            if ui.button("Add sublist").clicked() {
+                                                actions.1 = Some(CurrentAct::CreateHost(
+                                                    Some(index.clone()),
+                                                    String::new(),
+                                                ));
+                                            }
+                                        },
+                                    );
                                 },
                             );
                             o.2 = actions.0;
@@ -280,18 +310,20 @@ impl App {
 
                             ui.add_space(4.0);
 
-                            // Draw footer in small text.
-                            ui.horizontal(|ui| {
-                                ui.add_space(8.0);
-                                ui.label(
-                                    RichText::new(format!(
-                                        "{0}/{1} completed",
-                                        totals.0,
-                                        totals.1 + totals.0
-                                    ))
-                                    .weak(),
-                                );
-                            });
+                            // Draw footer in small text if there's something to show.
+                            if totals.0 + totals.1 >= 8 {
+                                ui.horizontal(|ui| {
+                                    ui.add_space(8.0);
+                                    ui.label(
+                                        RichText::new(format!(
+                                            "{0}/{1} completed",
+                                            totals.0,
+                                            totals.1 + totals.0
+                                        ))
+                                        .weak(),
+                                    );
+                                });
+                            }
                         });
                     }
                 });
@@ -343,8 +375,8 @@ impl App {
                         self.closedialog();
                     }
                 }
-				CurrentAct::CreateHost(v, title) => {
-					// Draw heading
+                CurrentAct::CreateHost(v, title) => {
+                    // Draw heading
                     ui.heading(match v {
                         None => "Create list".to_owned(),
                         Some(v) => {
@@ -378,7 +410,7 @@ impl App {
                     if canceled | confirmed {
                         self.closedialog();
                     }
-				}
+                }
                 CurrentAct::Edit(v) => {
                     ui.heading("Edit task");
 
@@ -416,29 +448,32 @@ impl App {
                         // We're adding an entry to a child entry
                         match &mut self.data.entry.deepget(v).data {
                             EntrySwitch::Host(w) => w,
-                            EntrySwitch::End(_) => panic!("Attempted to add an entry to a non-entryhost!"),
+                            EntrySwitch::End(_) => {
+                                panic!("Attempted to add an entry to a non-entryhost!")
+                            }
                         }
                     }
                 };
-				host.subelements.push(Entry::new_end(title.to_string(), "".to_string()));
-				host.sort();
+                host.subelements
+                    .push(Entry::new_end(title.to_string(), "".to_string()));
+                host.sort();
                 self.closedialog();
             }
-			CurrentAct::CreateHost(subject, title ) => {
-				// Add list to location with new title
-				let host = match subject {
-					None => &mut self.data.entry,
-					Some(v) => {
-						match &mut self.data.entry.deepget(v).data {
-							EntrySwitch::Host(w) => w,
-							EntrySwitch::End(_) => panic!("Attempted to add an entryhost to a non-entryhost!"),
-						}
-					}
-				};
-				host.subelements.push(Entry::new_host(title.to_string()));
-				host.sort();
-				self.closedialog();
-			}
+            CurrentAct::CreateHost(subject, title) => {
+                // Add list to location with new title
+                let host = match subject {
+                    None => &mut self.data.entry,
+                    Some(v) => match &mut self.data.entry.deepget(v).data {
+                        EntrySwitch::Host(w) => w,
+                        EntrySwitch::End(_) => {
+                            panic!("Attempted to add an entryhost to a non-entryhost!")
+                        }
+                    },
+                };
+                host.subelements.push(Entry::new_host(title.to_string()));
+                host.sort();
+                self.closedialog();
+            }
             CurrentAct::Remove(v) => {
                 let len = v.len();
 
@@ -503,10 +538,34 @@ impl eframe::App for App {
                         // I don't know what this is going to do
                     }
                     ui.with_layout(Layout::right_to_left(egui::Align::Min), |ui| {
-                        if ui.add_sized((20.0, 20.0), Button::new("+")).clicked() {
+                        let popupid = Id::new("addbuttonID");
+                        let addbutton = ui.add_sized((20.0, 20.0), Button::new("+"));
+                        if addbutton.clicked() {
                             // Raise add entry dialog on this entry host
                             self.action = CurrentAct::Create(None, String::new());
                         }
+
+                        if addbutton.secondary_clicked() {
+                            // Raise the popup if right clicked
+                            togglepopup(ui, popupid);
+                        }
+
+                        // Create popup
+                        popup_below_widget(
+                            ui,
+                            popupid,
+                            &addbutton,
+                            egui::PopupCloseBehavior::CloseOnClick,
+                            |ui| {
+                                ui.set_min_width(128.0);
+                                if ui.button("Add subtask").clicked() {
+                                    self.action = CurrentAct::Create(None, String::new());
+                                }
+                                if ui.button("Add sublist").clicked() {
+                                    self.action = CurrentAct::CreateHost(None, String::new());
+                                }
+                            },
+                        );
                     });
                 });
             });
