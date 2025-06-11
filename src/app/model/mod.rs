@@ -1,9 +1,13 @@
 // This file defines the in-memory data model.
 
+mod traits;
+
 use std::cmp::Ordering;
 
 use chrono::{Local, NaiveDateTime};
 use serde::{Deserialize, Serialize};
+
+use crate::app::model::traits::Filterable;
 
 pub fn make_sample_set() -> Model {
     Model {
@@ -90,6 +94,15 @@ pub enum EntrySwitch {
     Host(EntryHost),
 }
 
+impl Filterable for EntrySwitch {
+	fn visible(&self, filter: &str) -> bool {
+		match self {
+			Self::End(v) => v.visible(filter),
+			Self::Host(v) => v.visible(filter)
+		}
+	}
+}
+
 // An entry contains either an array of entries or the main entry data.
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct Entry {
@@ -119,13 +132,55 @@ impl Entry {
         }
     }
 
-    // Collects added date of Entry, regardless of it being a Host or End.
+    // Collects added date of Entry, regardless of switched content. As a result, this is a copy value.
     pub fn added(&self) -> NaiveDateTime {
         match &self.data {
             EntrySwitch::End(v) => v.added,
             EntrySwitch::Host(v) => v.date(),
         }
     }
+
+    // Collects completed date of Entry, regardless of switched content. As a result, this is a copy value.
+    pub fn completed(&self) -> Option<NaiveDateTime> {
+        match &self.data {
+            EntrySwitch::End(v) => v.completed,
+            EntrySwitch::Host(v) => v.completed(),
+        }
+    }
+}
+
+impl Eq for Entry {}
+
+impl PartialOrd for Entry {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Entry {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // Handle completed task logic.
+        let cmp = self
+            .completed()
+            .is_none()
+            .cmp(&other.completed().is_none())
+            .reverse();
+        if cmp != Ordering::Equal {
+            return cmp;
+        }
+
+        // Otherwise, return the comparison of the two dates.
+        self.added().cmp(&other.added()).reverse()
+    }
+}
+
+impl Filterable for Entry {
+	fn visible(&self, filter: &str) -> bool {
+		// Test filter on entry title
+		if self.title.contains(filter) {return true;}
+		// Otherwise, return result of nested
+		self.data.visible(filter)
+	}
 }
 
 // The main content of an entry.
@@ -146,6 +201,12 @@ impl EntryEnd {
     }
 }
 
+impl Filterable for EntryEnd {
+    fn visible(&self, _filter: &str) -> bool {
+        true
+    }
+}
+
 // An array of entries.
 #[derive(Serialize, Deserialize, Default, PartialEq, Debug)]
 pub struct EntryHost {
@@ -154,7 +215,7 @@ pub struct EntryHost {
 
 impl EntryHost {
     // Function that performs recursive traversal of entry hosts
-    pub fn deepget(&mut self, index: &[usize]) -> &mut Entry {
+    pub fn deepget_mut(&mut self, index: &[usize]) -> &mut Entry {
         // If the vector is empty, panic
         if index.len() == 0 {
             panic!("No indexes provided!")
@@ -167,6 +228,26 @@ impl EntryHost {
         // If this is not, try and access the deeper one
         else {
             let EntrySwitch::Host(v) = &mut self.subelements[index[0]].data else {
+                panic!("Entryhost deepget ended early! Index: {:#?}", index);
+            };
+            // Perform recursive deepget with slice excluding current index
+            v.deepget_mut(&index[1..])
+        }
+    }
+
+    pub fn deepget(&self, index: &[usize]) -> &Entry {
+        // If the vector is empty, panic
+        if index.len() == 0 {
+            panic!("No indexes provided!")
+        };
+
+        // If we're just fetching from this, return contained entry from this
+        if index.len() == 1 {
+            &self.subelements[index[0]]
+        }
+        // Go deeper
+        else {
+            let EntrySwitch::Host(v) = &self.subelements[index[0]].data else {
                 panic!("Entryhost deepget ended early! Index: {:#?}", index);
             };
             // Perform recursive deepget with slice excluding current index
@@ -185,8 +266,19 @@ impl EntryHost {
     }
 
     // Collect newest completed date of host
-    // (it's a little more nuanced than that, but that covers the basic idea)
-    // unf todo
+    // Terminates early as None if not all subelements are complete
+    pub fn completed(&self) -> Option<NaiveDateTime> {
+        let mut max = NaiveDateTime::MIN;
+
+        for v in &self.subelements {
+            match v.completed() {
+                None => return None,
+                Some(w) => max = max.max(w),
+            }
+        }
+
+        Some(max)
+    }
 
     // Recursive sort for entryhost contents
     pub fn sort(&mut self) {
@@ -197,18 +289,7 @@ impl EntryHost {
             }
         }
         // Now sort this entry
-        self.subelements.sort_by(|subj1, subj2| {
-            let s1date = subj1.added();
-            let s2date = subj2.added();
-            if s1date == s2date {
-                return Ordering::Equal;
-            };
-            return if !(s1date < s2date) {
-                Ordering::Less
-            } else {
-                Ordering::Greater
-            };
-        });
+        self.subelements.sort();
     }
 
     // Clean the completed entries within this host
@@ -230,4 +311,16 @@ impl EntryHost {
             }
         }
     }
+}
+
+impl Filterable for EntryHost {
+	// Visible status of an entry host (if this host contains a visible entry, this host is visible)
+	fn visible(&self, filter: &str) -> bool {
+		for v in &self.subelements {
+            if v.visible(filter) {
+                return true;
+            }
+        }
+        false
+	}
 }
