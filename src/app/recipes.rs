@@ -1,5 +1,7 @@
 use eframe::egui::{self, Id, Layout, Ui};
 
+// Library of generic "recipes" for use everywhere and in future projects for fixing headache (and sometimes causing new ones)
+
 // Recipe for drawing a "triple";
 // Left, right aligned content with centred content between.
 pub fn drawtriple<R>(

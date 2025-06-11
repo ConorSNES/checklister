@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::app::{model::EntryEnd, recipes::togglepopup};
 mod model;
 mod recipes;
+mod menubar;
 
 #[derive(PartialEq, Clone)]
 enum CurrentAct {
@@ -350,8 +351,8 @@ impl App {
                     true => Self::COL_DARK,
                 },
                 false => match displayeven {
-                    false => Self::COL_GREY10,
-                    true => Self::COL_WHITE,
+                    false => Self::COL_WHITE,
+                    true => Self::COL_GREY10,
                 },
             };
             // Draw surrounding box
@@ -634,55 +635,14 @@ impl eframe::App for App {
             }
         });
 
-        ctx.set_theme(Theme::Dark);
+        //ctx.set_theme(Theme::Dark);
 
         // construct navpanel
         egui::TopBottomPanel::top("navigation").show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
                 // Wrap these elements in a panel for improved layout
                 Frame::new().inner_margin(4.0).show(ui, |ui| {
-                    // Add navigation buttons.
-                    ui.style_mut().visuals.button_frame = false;
-                    {
-                        // File menu
-                        ui.menu_button("File", |ui| {
-                            // File menu popup contents
-                            ui.set_min_width(120.0);
-
-                            // Export function (pending implementation)
-                            if ui.button("Export tasks...").clicked() {
-                                println!("Export unimplemented!");
-                            }
-
-                            // Import function (pending implementation)
-                            if ui.button("Import tasks...").clicked() {
-                                println!("Import unimplemented!");
-                            }
-
-                            // todo: show hotkeys in buttons
-                            // Exit program
-                            if ui.button("Exit").clicked() {
-                                std::process::exit(0);
-                            }
-                        });
-                    }
-                    {
-                        // Edit menu
-                        ui.menu_button("Edit", |ui| {
-                            // Edit menu popup contents
-                            ui.set_min_width(120.0);
-
-                            // Find entry utility (pending implementation)
-                            if ui.button("Find").clicked() {
-                                self.action = CurrentAct::Find(String::new());
-                            }
-
-                            // Clean up button
-                            if ui.button("Cleanup").clicked() {
-                                self.action = CurrentAct::Confirm(Box::new(CurrentAct::Cleanup));
-                            }
-                        });
-                    }
+                    menubar::draw_menubar(self, ctx, ui);
 
                     ui.with_layout(Layout::right_to_left(egui::Align::Min), |ui| {
                         let popupid = Id::new("addbuttonID");
