@@ -1,6 +1,6 @@
 use eframe::egui::{
     self, popup_below_widget, Button, Color32, Frame, Id, KeyboardShortcut, Label, Layout,
-    Modifiers, RichText, ScrollArea, TextEdit, Theme, Ui,
+    Modifiers, RichText, ScrollArea, TextEdit, Ui,
 };
 use model::{Entry, EntryHost, EntrySwitch, Model};
 use serde::{Deserialize, Serialize};
@@ -75,7 +75,7 @@ impl App {
         ScrollArea::vertical().show(ui, |ui| {
             Frame::new().show(ui, |ui| {
                 // Start the first drawentryhost on internal (root) data.
-                let result = Self::drawinnerentryhost(ui, &mut self.data.entry, vec![], false);
+                let result = Self::drawinnerentryhost(ui, &mut self.data.entry, vec![]);
 
                 // If we have a new action from drawing, set the current action
                 if let Some(newact) = result.2 {
@@ -105,7 +105,6 @@ impl App {
         ui: &mut Ui,
         subject: &mut EntryHost,
         index: Vec<usize>,
-        displayeven: bool,
     ) -> (usize, usize, Option<CurrentAct>) {
         let mut o = (0, 0, None);
 
@@ -121,7 +120,7 @@ impl App {
             newidx.push(i);
 
             // Draw entry
-            let pending = Self::drawentry(ui, subsubject, newidx, displayeven);
+            let pending = Self::drawentry(ui, subsubject, newidx);
             o.0 += pending.0;
             o.1 += pending.1;
             // The newest action is returned if it is not an else.
@@ -137,7 +136,6 @@ impl App {
         title: String,
         subject: &mut EntryHost,
         index: Vec<usize>,
-        displayeven: bool,
     ) -> (usize, usize, Option<CurrentAct>) {
         let mut o = (0, 0, None);
         // This is a node of the tree with partial data.
@@ -207,7 +205,7 @@ impl App {
             ui.add_space(4.0);
 
             // Go recursive using inner entry host.
-            let totals = Self::drawinnerentryhost(ui, subject, index, !displayeven);
+            let totals = Self::drawinnerentryhost(ui, subject, index);
 
             // Merge pending totals with output totals.
             o.0 += totals.0;
@@ -340,9 +338,9 @@ impl App {
         ui: &mut Ui,
         subject: &mut Entry,
         index: Vec<usize>,
-        displayeven: bool,
     ) -> (usize, usize, Option<CurrentAct>) {
         let mut o = (0, 0, None);
+		let displayeven = index.len() % 2 == 0; // Entries alternate between colours depending on depth-even-ness.
         ui.with_layout(Layout::left_to_right(egui::Align::Min), |ui| {
             // Collect fill colour
             let dispfill = match ui.style().visuals.dark_mode {
@@ -370,7 +368,6 @@ impl App {
                             subject.title.to_owned(),
                             v,
                             index,
-                            displayeven,
                         );
                     }
                 });
@@ -401,11 +398,11 @@ impl App {
                     });
 
                     if confirmed {
-                        self.applydialog();
+                        self.applyaction();
                     }
 
                     if canceled {
-                        self.closedialog();
+                        self.closeaction();
                     }
                 }
                 CurrentAct::Create(v, title) => {
@@ -440,11 +437,11 @@ impl App {
                     });
 
                     if confirmed {
-                        self.applydialog();
+                        self.applyaction();
                     }
 
                     if canceled | confirmed {
-                        self.closedialog();
+                        self.closeaction();
                     }
                 }
                 CurrentAct::CreateHost(v, title) => {
@@ -479,11 +476,11 @@ impl App {
                     });
 
                     if confirmed {
-                        self.applydialog();
+                        self.applyaction();
                     }
 
                     if canceled | confirmed {
-                        self.closedialog();
+                        self.closeaction();
                     }
                 }
                 CurrentAct::Edit(v) => {
@@ -524,7 +521,7 @@ impl App {
                     });
 
                     if close {
-                        self.closedialog();
+                        self.closeaction();
                     }
                 }
                 _ => {}
@@ -533,7 +530,7 @@ impl App {
     }
 
     // Apply an open dialog pane
-    fn applydialog(&mut self) {
+    fn applyaction(&mut self) {
         match &mut self.action {
             CurrentAct::Confirm(subject) => {
                 self.action = *subject.clone();
@@ -561,7 +558,7 @@ impl App {
                 host.subelements
                     .push(Entry::new_end(titlefilter, "".to_string()));
                 host.sort();
-                self.closedialog();
+                self.closeaction();
             }
             CurrentAct::CreateHost(subject, title) => {
                 // Add list to location with new title
@@ -576,7 +573,7 @@ impl App {
                 };
                 host.subelements.push(Entry::new_host(title.to_string()));
                 host.sort();
-                self.closedialog();
+                self.closeaction();
             }
             CurrentAct::Remove(v) => {
                 let len = v.len();
@@ -601,12 +598,15 @@ impl App {
                 // Reset the action
                 self.action = CurrentAct::None;
             }
-            _ => self.closedialog(),
+			CurrentAct::Cleanup => {
+				self.data.entry.cleanup();
+			}
+			_ => self.closeaction(),
         }
     }
 
     // Close an open dialog pane
-    fn closedialog(&mut self) {
+    fn closeaction(&mut self) {
         self.action = CurrentAct::None;
     }
 }
@@ -622,12 +622,12 @@ impl eframe::App for App {
 
             if i.key_down(egui::Key::Enter) {
                 // Apply the current dialog if enter is down.
-                self.applydialog();
+                self.applyaction();
             }
 
             if i.key_down(egui::Key::Escape) {
                 // Close the current dialog if enter is down.
-                self.closedialog();
+                self.closeaction();
             }
 
             if i.consume_shortcut(&Self::KEYCOMBO_FIND) {
@@ -635,15 +635,15 @@ impl eframe::App for App {
             }
         });
 
-        //ctx.set_theme(Theme::Dark);
-
         // construct navpanel
         egui::TopBottomPanel::top("navigation").show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
                 // Wrap these elements in a panel for improved layout
                 Frame::new().inner_margin(4.0).show(ui, |ui| {
+					// Draw menubar/navbar
                     menubar::draw_menubar(self, ctx, ui);
 
+					// Draw add button
                     ui.with_layout(Layout::right_to_left(egui::Align::Min), |ui| {
                         let popupid = Id::new("addbuttonID");
                         let addbutton = ui.add_sized((20.0, 20.0), Button::new("+").frame(true));
@@ -692,11 +692,9 @@ impl eframe::App for App {
         });
 
         // account for any removal actions after layout paint
-        if let CurrentAct::Remove(_) = self.action {
-            self.applydialog();
-        }
-        if let CurrentAct::Cleanup = self.action {
-            self.data.entry.cleanup();
-        }
+		match self.action {
+			CurrentAct::Remove(_) | CurrentAct::Cleanup => self.applyaction(),
+			_ => {}
+		}
     }
 }
