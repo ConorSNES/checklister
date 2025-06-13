@@ -25,6 +25,32 @@ pub fn drawtriple<R>(
     });
 }
 
+// Basic drawtriple was giving me headache with double/triple mutable borrows, so we have another version for sharing a mutable value instead 
+// (since the compiler has to assume all three need to borrow at the same time, which just isn't true)
+pub fn drawtriple_mutpass<R, T>(
+	ui: &mut Ui,
+	passval : &mut T,
+	left: impl FnOnce(&mut Ui, &mut T) -> R,
+	centre: impl FnOnce(&mut Ui, &mut T) -> R,
+	right: impl FnOnce(&mut Ui, &mut T) -> R
+) {
+	ui.horizontal(|ui| {
+		// Draw left, include mutable passval
+		left(ui, passval);
+
+		// Create rtl
+		ui.with_layout(Layout::right_to_left(egui::Align::Min), |ui| {
+			// Draw right with passval
+			right(ui, passval);
+
+			// Draw centred box with content
+            ui.vertical_centered(|ui| {
+				centre(ui, passval);
+			});
+		});
+	}); 
+}
+
 // Recipe for popup draw toggle
 pub fn togglepopup(ui: &mut Ui, id: Id) {
 	ui.memory_mut(|mem| mem.toggle_popup(id));

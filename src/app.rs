@@ -5,7 +5,7 @@ use eframe::egui::{
 use model::{Entry, EntryHost, EntrySwitch, Model};
 use serde::{Deserialize, Serialize};
 
-use crate::app::{model::EntryEnd, recipes::togglepopup};
+use crate::app::recipes::{drawtriple_mutpass, togglepopup};
 mod model;
 mod recipes;
 mod menubar;
@@ -28,6 +28,12 @@ impl Default for CurrentAct {
     fn default() -> Self {
         Self::None
     }
+}
+
+impl CurrentAct {
+	fn some(&self) -> bool {
+		!(*self == Self::None)
+	}
 }
 
 impl CurrentAct {
@@ -130,163 +136,51 @@ impl App {
         o
     }
 
-	// Draw an entry host. Harbors upon drawinnerentryhost for drawing inner content without tools and headers.
-    fn drawentryhost(
-        ui: &mut Ui,
-        title: String,
-        subject: &mut EntryHost,
-        index: Vec<usize>,
-    ) -> (usize, usize, Option<CurrentAct>) {
-        let mut o = (0, 0, None);
-        // This is a node of the tree with partial data.
-        ui.with_layout(Layout::top_down(egui::Align::Min), |ui| {
-            // Draw the header of the box.
-
-            // Workaround for "waah you're going to start race conditions by writing to the same place";
-            // Prioritise certain actions through a tuple.
-            let mut actions = (None, None);
-            recipes::drawtriple(
-                ui,
-                |ui| {
-                    ui.add_space(20.0);
-                },
-                |ui| {
-                    // Draw title.
-                    if ui.add(Label::new(title)).double_clicked() {
-                        // When double clicked, edit this
-                        actions.0 = Some(CurrentAct::Edit(index.clone()));
-                    }
-                },
-                |ui| {
-                    let popupid = Id::new(index.clone());
-
-                    let addbutton = ui.add_sized((20.0, 20.0), Button::new("+"));
-
-                    if addbutton.clicked() {
-                        // Raise add entry dialog on this entry host
-                        actions.1 = Some(CurrentAct::Create(Some(index.clone()), String::new()));
-                    }
-
-                    if addbutton.secondary_clicked() {
-                        // Raise popup menu for adding items
-                        togglepopup(ui, popupid);
-                    }
-
-                    // Create popup
-                    popup_below_widget(
-                        ui,
-                        popupid,
-                        &addbutton,
-                        egui::PopupCloseBehavior::CloseOnClick,
-                        |ui| {
-                            ui.set_min_width(128.0);
-                            if ui.button("Add subtask").clicked() {
-                                actions.1 =
-                                    Some(CurrentAct::Create(Some(index.clone()), String::new()));
-                            }
-                            if ui.button("Add sublist").clicked() {
-                                actions.1 = Some(CurrentAct::CreateHost(
-                                    Some(index.clone()),
-                                    String::new(),
-                                ));
-                            }
-                            if ui.button("Delete this list").clicked() {
-                                actions.1 = Some(CurrentAct::Remove(index.clone()));
-                            }
-                        },
-                    );
-                },
-            );
-            o.2 = actions.0;
-            if o.2 == None {
-                o.2 = actions.1
-            }
-
-            ui.add_space(4.0);
-
-            // Go recursive using inner entry host.
-            let totals = Self::drawinnerentryhost(ui, subject, index);
-
-            // Merge pending totals with output totals.
-            o.0 += totals.0;
-            o.1 += totals.1;
-
-            // If we are not raising a new entry on this host, replace the current action with the one collected from totals
-            // (technically wastes processing since we never have to even consider this when we're raising add entry. might be negligible but please consider later)
-            if o.2 == None {
-                o.2 = totals.2;
-            }
-
-            ui.add_space(4.0);
-
-            // Draw footer in small text if there's something to show.
-            if totals.0 + totals.1 >= 8 {
-                ui.horizontal(|ui| {
-                    ui.add_space(8.0);
-                    ui.label(
-                        RichText::new(format!("{0}/{1} completed", totals.0, totals.1 + totals.0))
-                            .weak(),
-                    );
-                });
-            }
-        });
-        o
-    }
-
-    // Shorthand for drawing an entry end
-    fn drawentryend(
-        ui: &mut Ui,
-        title: String,
-        subject: &mut EntryEnd,
-        index: Vec<usize>,
-    ) -> (usize, usize, Option<CurrentAct>) {
-        // This is a node of the tree with full data.
-        let mut o = (0, 0, None);
-        let mut acts = (None, None);
-        let completed = subject.completed.is_some();
-        recipes::drawtriple(
-            ui,
-            |ui| {
-                // Draw the check button. (you can't add onclick events to checkboxes)
+	fn drawentryleft(ui: &mut Ui, subject: &mut EntrySwitch) -> (usize, usize) {
+		match subject {
+			EntrySwitch::End(v) => {
+				// Draw the check button. (you can't add onclick events to checkboxes)
                 if ui
                     .add_sized(
                         (20.0, 20.0),
-                        Button::new(match completed {
-                            false => " ",
-                            true => "✔",
+                        Button::new(match v.completed {
+                            None => " ",
+                            Some(_) => "✔",
                         }),
                     )
                     .clicked()
                 {
                     // When clicked, toggle completed state.
-                    subject.toggle();
+                    v.toggle();
                 }
 
                 // Add to completion stats.
                 // If this entry is complete, add label for date completed.
-                o = if let Some(comp) = subject.completed {
+                if let Some(comp) = v.completed {
                     ui.add(Label::new(
                         RichText::new(comp.format("%d/%m/%Y").to_string())
                             .size(10.0)
                             .weak(),
                     ));
-                    (1, 0, None)
+                    (1, 0)
                 } else {
-                    (0, 1, None)
-                };
-            },
-            |ui| {
-                // Add title.
-                if ui.label(title).double_clicked() {
-                    // When doubleclicked, start editing this entry
-                    acts.0 = Some(CurrentAct::Edit(index.clone()));
-                };
-            },
-            |ui| {
-                // Add edit button.
-                // online egui release was **too new**. detailled popup tech gets added 1.32
+                    (0, 1)
+                }
+			},
+			EntrySwitch::Host(_) => {
+				ui.add_space(20.0);
+				(0, 0)
+			}
+		}
+	}
 
-                let popupid = Id::new(index.clone());
+	fn drawentryright(ui: &mut Ui, subject: &mut EntrySwitch, index: &Vec<usize>, ) -> CurrentAct {
+		let mut action = CurrentAct::None;
+		let popupid = Id::new(index.clone());
+		match subject {
+			EntrySwitch::End(v) => {
+				// Add edit button.
+                // online egui release was **too new**. detailled popup tech gets added 1.32
 
                 let menuresp = ui.add_sized(
                     [20.0, 20.0],
@@ -304,34 +198,63 @@ impl App {
                     &menuresp,
                     egui::PopupCloseBehavior::CloseOnClick,
                     |ui| {
-                        // This is where you put the switch edit code snoosk
                         ui.set_min_width(128.0);
                         if ui.button("Edit").clicked() {
-                            acts.1 = Some(CurrentAct::Edit(index.clone()));
+                            action = CurrentAct::Edit(index.clone());
                         }
                         if ui.button("Delete").clicked() {
-                            acts.1 = Some(
+                            action = 
                                 // You need to confirm deletion of incomplete tasks
-                                match completed {
-                                    false => CurrentAct::Confirm(Box::new(CurrentAct::Remove(
+                                match v.completed {
+                                    None => CurrentAct::Confirm(Box::new(CurrentAct::Remove(
                                         index.clone(),
                                     ))),
-                                    true => CurrentAct::Remove(index.clone()),
-                                },
-                            );
+                                    Some(_) => CurrentAct::Remove(index.clone()),
+                                }
+                            ;
                         }
                     },
                 );
-            },
-        );
-        // Collapse the pending actions.
-        o.2 = acts.0;
-        if o.2 == None {
-            o.2 = acts.1
-        }
+			},
+			EntrySwitch::Host(_) => {
+                    let addbutton = ui.add_sized((20.0, 20.0), Button::new("+"));
 
-        o
-    }
+                    if addbutton.clicked() {
+                        // Raise add entry dialog on this entry host
+                        action = CurrentAct::Create(Some(index.clone()), String::new());
+                    }
+
+                    if addbutton.secondary_clicked() {
+                        // Raise popup menu for adding items
+                        togglepopup(ui, popupid);
+                    }
+
+                    // Create popup
+                    popup_below_widget(
+                        ui,
+                        popupid,
+                        &addbutton,
+                        egui::PopupCloseBehavior::CloseOnClick,
+                        |ui| {
+                            ui.set_min_width(128.0);
+                            if ui.button("Add subtask").clicked() {
+                                action = CurrentAct::Create(Some(index.clone()), String::new());
+                            }
+                            if ui.button("Add sublist").clicked() {
+                                action = CurrentAct::CreateHost(
+                                    Some(index.clone()),
+                                    String::new(),
+                                );
+                            }
+                            if ui.button("Delete this list").clicked() {
+                                action = CurrentAct::Remove(index.clone());
+                            }
+                        },
+                    );
+			}
+		}
+		action
+	}
 
     // Dictates how any entry should be drawn.
     fn drawentry(
@@ -359,17 +282,53 @@ impl App {
                 .corner_radius(4)
                 .inner_margin(4)
                 .show(ui, |ui| {
-                    // Switch depending on subject.
-                    if let EntrySwitch::End(v) = &mut subject.data {
-                        o = Self::drawentryend(ui, subject.title.to_owned(), v, index);
-                    } else if let EntrySwitch::Host(v) = &mut subject.data {
-                        o = Self::drawentryhost(
-                            ui,
-                            subject.title.to_owned(),
-                            v,
-                            index,
-                        );
-                    }
+					ui.with_layout(Layout::top_down(egui::Align::Min), |ui| {
+						let mut subjcompletion = (0, 0);
+						let mut subjaction = CurrentAct::default();
+
+						// First, draw our header triple.
+						drawtriple_mutpass(ui, subject,  
+							|ui, v| {
+							subjcompletion = Self::drawentryleft(ui, &mut v.data);
+						}, 
+						|ui, v| {
+							// Add title.
+							if ui.label(v.title.clone()).double_clicked() {
+								// When doubleclicked, start editing this entry
+								o.2 = Some(CurrentAct::Edit(index.clone()));
+							};
+						}, 
+						|ui, v| {
+							subjaction = Self::drawentryright(ui, &mut v.data, &index);
+						});
+
+						// Merge subjcompletion and subaction with o
+						if subjaction.some() {
+							o.2 = Some(subjaction);
+						}
+						o.0 = subjcompletion.0;
+						o.1 = subjcompletion.1;
+
+						// If this is an entry host, draw the inside
+						if let EntrySwitch::Host(v) = &mut subject.data {
+							let res = Self::drawinnerentryhost(ui, v, index);
+							o.0 += res.0;
+							o.1 += res.1;
+
+							ui.add_space(4.0);
+
+							// Draw footer in small text if there's something to show.
+							if res.0 + res.1 >= 8 {
+								ui.horizontal(|ui| {
+									ui.add_space(8.0);
+									ui.label(
+										RichText::new(format!("{0}/{1} completed", res.0, res.1 + res.0))
+											.weak(),
+									);
+								});
+							}
+						}
+					});
                 });
         });
 
