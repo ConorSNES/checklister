@@ -30,7 +30,7 @@ pub fn draw_menubar(app: &mut App, ctx: &Context, ui: &mut Ui) {
 
             // Exit program
             if ui.button("Exit").clicked() {
-                std::process::exit(0);
+				app.action = CurrentAct::Exit;
             }
         });
     }
@@ -44,6 +44,15 @@ pub fn draw_menubar(app: &mut App, ctx: &Context, ui: &mut Ui) {
             if ui.button("Find").clicked() {
                 app.action = CurrentAct::Find(String::new());
             }
+
+			ui.separator();
+
+			// Autosort pref
+
+			// Sort button
+			if ui.button("Sort").clicked() {
+				app.action = CurrentAct::Sort;
+			}
 
             // Clean up button
             if ui.button("Cleanup").clicked() {

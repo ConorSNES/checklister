@@ -595,6 +595,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "checklister"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "eframe",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -864,16 +874,6 @@ dependencies = [
  "log",
  "nohash-hasher",
  "profiling",
-]
-
-[[package]]
-name = "egui-testing"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "eframe",
- "serde",
- "serde_json",
 ]
 
 [[package]]

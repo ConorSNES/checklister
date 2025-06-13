@@ -1,6 +1,5 @@
 use eframe::egui::{
-    self, popup_below_widget, Button, Color32, Frame, Id, KeyboardShortcut, Label, Layout,
-    Modifiers, RichText, ScrollArea, TextEdit, Ui,
+    self, popup_below_widget, Button, Color32, Frame, Id, KeyboardShortcut, Label, Layout, Modal, Modifiers, RichText, ScrollArea, TextEdit, Ui
 };
 use model::{Entry, EntryHost, EntrySwitch, Model};
 use serde::{Deserialize, Serialize};
@@ -10,16 +9,24 @@ mod model;
 mod recipes;
 mod menubar;
 
+enum DisplayType {
+	None,
+	Modal,
+	Inline,
+}
+
 #[derive(PartialEq, Clone)]
 enum CurrentAct {
     None,
     Confirm(Box<CurrentAct>),
-    // Originally (and ideally), we use references to represent the target. This resulted in lifetime complications, so we use a (slightly more expensive) index based method now.
+    // Originally (and ideally), we use references to represent the target. This resulted in lifetime complications, so we use a (slightly more expensive?) index based method now.
     Create(Option<Vec<usize>>, String), // Create an ending member of targeted vector
     CreateHost(Option<Vec<usize>>, String), // Create a host member of targeted vector
     Edit(Vec<usize>),
     Remove(Vec<usize>),
     Cleanup,
+	Sort,
+	Exit,
     Find(String),
 }
 
@@ -32,7 +39,16 @@ impl Default for CurrentAct {
 
 impl CurrentAct {
 	fn some(&self) -> bool {
-		!(*self == Self::None)
+		*self != Self::None
+	}
+
+	fn display(&self) -> DisplayType {
+		match self {
+			Self::None | Self::Cleanup | Self::Sort => DisplayType::None,
+			Self::Confirm(_) | Self::Create(_, _) | Self::CreateHost(_, _) => DisplayType::Modal,
+			Self::Find(_) | Self::Edit(_) => DisplayType::Inline,
+			_ => DisplayType::None
+		}
 	}
 }
 
@@ -59,8 +75,10 @@ pub struct App {
 
 impl Default for App {
     fn default() -> Self {
+		let mut datamodel = model::make_sample_set();
+		datamodel.entry.sort();
         Self {
-            data: model::make_sample_set(),
+            data: datamodel,
             action: CurrentAct::None,
         }
     }
@@ -566,6 +584,11 @@ impl App {
             }
 			CurrentAct::Cleanup => {
 				self.data.entry.cleanup();
+				self.closeaction();
+			}
+			CurrentAct::Sort => {
+				self.data.entry.sort();
+				self.closeaction();
 			}
 			_ => self.closeaction(),
         }
@@ -583,7 +606,7 @@ impl eframe::App for App {
         ctx.input_mut(|i| {
             if i.key_down(egui::Key::F4) {
                 // Terminate program if f4 is down.
-                std::process::exit(0);
+				self.action = CurrentAct::Exit;
             }
 
             if i.key_down(egui::Key::Enter) {
@@ -645,21 +668,28 @@ impl eframe::App for App {
         });
 
         // Show current edit modal, if one is present
-        if self.action != CurrentAct::None {
-            egui::TopBottomPanel::bottom("info").show(ctx, |ui| {
-                self.dialogview(ui);
-            });
-        }
+		let dt = self.action.display();
+		match dt {
+			DisplayType::Modal => {
+				Modal::new("info".into()).show(ctx, |ui| {self.dialogview(ui);});
+			},
+			DisplayType::Inline => {
+				egui::TopBottomPanel::top("info").show(ctx, |ui| {self.dialogview(ui);});
+			},
+			DisplayType::None => {}
+		}
 
         // construct body
         egui::CentralPanel::default().show(ctx, |ui| {
             // Show all tasks
             self.tableview(ui);
+			
         });
 
-        // account for any removal actions after layout paint
+        // account for any applicable actions after layout paint
 		match self.action {
-			CurrentAct::Remove(_) | CurrentAct::Cleanup => self.applyaction(),
+			CurrentAct::Exit => {std::process::exit(0);},
+			CurrentAct::Remove(_) | CurrentAct::Cleanup | CurrentAct::Sort => self.applyaction(),
 			_ => {}
 		}
     }
