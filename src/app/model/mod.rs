@@ -1,6 +1,6 @@
 // This file defines the in-memory data model.
 
-mod traits;
+pub mod traits;
 
 use std::cmp::Ordering;
 
@@ -203,7 +203,7 @@ impl EntryEnd {
 
 impl Filterable for EntryEnd {
     fn visible(&self, _filter: &str) -> bool {
-        true
+        false
     }
 }
 

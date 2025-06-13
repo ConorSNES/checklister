@@ -5,7 +5,7 @@ use eframe::egui::{
 use model::{Entry, EntryHost, EntrySwitch, Model};
 use serde::{Deserialize, Serialize};
 
-use crate::app::recipes::{drawtriple_mutpass, togglepopup};
+use crate::app::{model::traits::Filterable, recipes::{drawtriple_mutpass, togglepopup}};
 mod model;
 mod recipes;
 mod menubar;
@@ -81,7 +81,8 @@ impl App {
         ScrollArea::vertical().show(ui, |ui| {
             Frame::new().show(ui, |ui| {
                 // Start the first drawentryhost on internal (root) data.
-                let result = Self::drawinnerentryhost(ui, &mut self.data.entry, vec![]);
+				let filter = if let CurrentAct::Find(v) = &self.action { v } else { &"".to_owned() };
+                let result = Self::drawinnerentryhost(ui, &mut self.data.entry, vec![], filter);
 
                 // If we have a new action from drawing, set the current action
                 if let Some(newact) = result.2 {
@@ -111,6 +112,7 @@ impl App {
         ui: &mut Ui,
         subject: &mut EntryHost,
         index: Vec<usize>,
+		filter: &str,
     ) -> (usize, usize, Option<CurrentAct>) {
         let mut o = (0, 0, None);
 
@@ -126,7 +128,7 @@ impl App {
             newidx.push(i);
 
             // Draw entry
-            let pending = Self::drawentry(ui, subsubject, newidx);
+            let pending = Self::drawentry(ui, subsubject, newidx, filter);
             o.0 += pending.0;
             o.1 += pending.1;
             // The newest action is returned if it is not an else.
@@ -261,8 +263,13 @@ impl App {
         ui: &mut Ui,
         subject: &mut Entry,
         index: Vec<usize>,
+		filter: &str,
     ) -> (usize, usize, Option<CurrentAct>) {
-        let mut o = (0, 0, None);
+		let mut o = (0, 0, None);
+
+		// Skip if the filter cannot be applied.
+		if !subject.visible(filter) {return o;}
+        
 		let displayeven = index.len() % 2 == 0; // Entries alternate between colours depending on depth-even-ness.
         ui.with_layout(Layout::left_to_right(egui::Align::Min), |ui| {
             // Collect fill colour
@@ -311,7 +318,7 @@ impl App {
 
 						// If this is an entry host, draw the inside
 						if let EntrySwitch::Host(v) = &mut subject.data {
-							let res = Self::drawinnerentryhost(ui, v, index);
+							let res = Self::drawinnerentryhost(ui, v, index, filter);
 							o.0 += res.0;
 							o.1 += res.1;
 

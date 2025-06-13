@@ -4,7 +4,7 @@ use eframe::egui::{self, Id, Layout, Ui};
 
 // Recipe for drawing a "triple";
 // Left, right aligned content with centred content between.
-pub fn drawtriple<R>(
+pub fn _drawtriple<R>(
     ui: &mut Ui,
     left: impl FnOnce(&mut Ui) -> R,
     centre: impl FnOnce(&mut Ui) -> R,
