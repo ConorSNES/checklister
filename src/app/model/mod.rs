@@ -82,29 +82,29 @@ pub fn make_sample_set() -> Model {
 }
 
 // The data model contains only one entry host.
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize, Hash)]
 pub struct Model {
     pub entry: EntryHost,
 }
 
 // Used to describe the switch of entries.
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Hash)]
 pub enum EntrySwitch {
     End(EntryEnd),
     Host(EntryHost),
 }
 
 impl Filterable for EntrySwitch {
-	fn visible(&self, filter: &str) -> bool {
-		match self {
-			Self::End(v) => v.visible(filter),
-			Self::Host(v) => v.visible(filter)
-		}
-	}
+    fn visible(&self, filter: &str) -> bool {
+        match self {
+            Self::End(v) => v.visible(filter),
+            Self::Host(v) => v.visible(filter),
+        }
+    }
 }
 
 // An entry contains either an array of entries or the main entry data.
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Hash)]
 pub struct Entry {
     pub title: String,
     pub data: EntrySwitch,
@@ -175,16 +175,18 @@ impl Ord for Entry {
 }
 
 impl Filterable for Entry {
-	fn visible(&self, filter: &str) -> bool {
-		// Test filter on entry title
-		if self.title.contains(filter) {return true;}
-		// Otherwise, return result of nested
-		self.data.visible(filter)
-	}
+    fn visible(&self, filter: &str) -> bool {
+        // Test filter on entry title
+        if self.title.contains(filter) {
+            return true;
+        }
+        // Otherwise, return result of nested
+        self.data.visible(filter)
+    }
 }
 
 // The main content of an entry.
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Hash)]
 pub struct EntryEnd {
     pub body: String,
     pub added: NaiveDateTime,
@@ -208,7 +210,7 @@ impl Filterable for EntryEnd {
 }
 
 // An array of entries.
-#[derive(Serialize, Deserialize, Default, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Default, PartialEq, Debug, Hash)]
 pub struct EntryHost {
     pub subelements: Vec<Entry>,
 }
@@ -314,13 +316,13 @@ impl EntryHost {
 }
 
 impl Filterable for EntryHost {
-	// Visible status of an entry host (if this host contains a visible entry, this host is visible)
-	fn visible(&self, filter: &str) -> bool {
-		for v in &self.subelements {
+    // Visible status of an entry host (if this host contains a visible entry, this host is visible)
+    fn visible(&self, filter: &str) -> bool {
+        for v in &self.subelements {
             if v.visible(filter) {
                 return true;
             }
         }
         false
-	}
+    }
 }

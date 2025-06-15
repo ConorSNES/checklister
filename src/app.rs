@@ -1,11 +1,13 @@
+use std::hash::{Hash, Hasher};
 use eframe::egui::{
     self, popup_below_widget, Button, Color32, Frame, Id, KeyboardShortcut, Label, Layout, Modal, Modifiers, RichText, ScrollArea, TextEdit, Ui
 };
 use model::{Entry, EntryHost, EntrySwitch, Model};
 use serde::{Deserialize, Serialize};
+use crate::app::{model::{traits::Filterable, EntryEnd}, recipes::{drawtriple_mutpass, togglepopup}, xorhasher::XorHasher};
 
-use crate::app::{model::traits::Filterable, recipes::{drawtriple_mutpass, togglepopup}};
-mod model;
+pub mod model;
+pub mod xorhasher;
 mod recipes;
 mod menubar;
 
@@ -97,8 +99,15 @@ impl App {
 	const KEYCOMBO_ADD: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, egui::Key::N);
 	const KEYCOMBO_ADDLIST: KeyboardShortcut = KeyboardShortcut::new(Modifiers { alt: false, ctrl: false, shift: true, mac_cmd: false, command: true }, egui::Key::N);
 
+	// Returns a finished hash of the current elements.
+	fn model_hash(&self) -> u8 {
+		let mut hashobj = XorHasher::default();
+		self.data.hash(&mut hashobj);
+		hashobj.finish() as u8
+	}
+
     // Constructs view of all elements.
-    fn tableview(&mut self, ui: &mut Ui) {
+    fn show_tableview(&mut self, ui: &mut Ui) {
         ScrollArea::vertical().show(ui, |ui| {
             Frame::new().show(ui, |ui| {
                 // Start the first drawentryhost on internal (root) data.
@@ -127,6 +136,64 @@ impl App {
             })
         });
     }
+
+	// Constructs an end check button for an element.
+	fn show_checkbutton(ui: &mut Ui, subject: &mut EntryEnd) {
+		if ui
+			.add_sized(
+				(20.0, 20.0),
+				Button::new(match subject.completed {
+					None => " ",
+					Some(_) => "✔",
+				}),
+			)
+			.clicked()
+		{
+			// When clicked, toggle completed state.
+			subject.toggle();
+		}
+	}
+
+	fn show_addbutton(ui: &mut Ui, index: Option<Vec<usize>>, popupid: Id) -> CurrentAct {
+		let addbutton = ui.add_sized((20.0, 20.0), Button::new("+"));
+		let mut action = CurrentAct::None;
+
+		if addbutton.clicked() {
+			// Raise add entry dialog on this entry host
+			action = CurrentAct::Create(index.clone(), String::new());
+		}
+
+		if addbutton.secondary_clicked() {
+			// Raise popup menu for adding items
+			togglepopup(ui, popupid);
+		}
+
+		// Create popup
+		popup_below_widget(
+			ui,
+			popupid,
+			&addbutton,
+			egui::PopupCloseBehavior::CloseOnClick,
+			|ui| {
+				ui.set_min_width(128.0);
+				if ui.button("Add subtask").clicked() {
+					action = CurrentAct::Create(index.clone(), String::new());
+				}
+				if ui.button("Add sublist").clicked() {
+					action = CurrentAct::CreateHost(
+						index.clone(),
+						String::new(),
+					);
+				}
+				if let Some(i) = &index {
+					if ui.button("Delete this list").clicked() {
+						action = CurrentAct::Remove(i.clone());
+					}
+				}
+			},
+		);
+		action
+	}
 
     // Wraps many drawentry(s) together.
     fn drawinnerentryhost(
@@ -163,19 +230,7 @@ impl App {
 		match subject {
 			EntrySwitch::End(v) => {
 				// Draw the check button. (you can't add onclick events to checkboxes)
-                if ui
-                    .add_sized(
-                        (20.0, 20.0),
-                        Button::new(match v.completed {
-                            None => " ",
-                            Some(_) => "✔",
-                        }),
-                    )
-                    .clicked()
-                {
-                    // When clicked, toggle completed state.
-                    v.toggle();
-                }
+                Self::show_checkbutton(ui, v);
 
                 // Add to completion stats.
                 // If this entry is complete, add label for date completed.
@@ -240,40 +295,7 @@ impl App {
                 );
 			},
 			EntrySwitch::Host(_) => {
-                    let addbutton = ui.add_sized((20.0, 20.0), Button::new("+"));
-
-                    if addbutton.clicked() {
-                        // Raise add entry dialog on this entry host
-                        action = CurrentAct::Create(Some(index.clone()), String::new());
-                    }
-
-                    if addbutton.secondary_clicked() {
-                        // Raise popup menu for adding items
-                        togglepopup(ui, popupid);
-                    }
-
-                    // Create popup
-                    popup_below_widget(
-                        ui,
-                        popupid,
-                        &addbutton,
-                        egui::PopupCloseBehavior::CloseOnClick,
-                        |ui| {
-                            ui.set_min_width(128.0);
-                            if ui.button("Add subtask").clicked() {
-                                action = CurrentAct::Create(Some(index.clone()), String::new());
-                            }
-                            if ui.button("Add sublist").clicked() {
-                                action = CurrentAct::CreateHost(
-                                    Some(index.clone()),
-                                    String::new(),
-                                );
-                            }
-                            if ui.button("Delete this list").clicked() {
-                                action = CurrentAct::Remove(index.clone());
-                            }
-                        },
-                    );
+                Self::show_addbutton(ui, Some(index.clone()), popupid);
 			}
 		}
 		action
@@ -544,7 +566,6 @@ impl App {
                 .to_string();
                 host.subelements
                     .push(Entry::new_end(titlefilter, "".to_string()));
-                host.sort();
                 self.closeaction();
             }
             CurrentAct::CreateHost(subject, title) => {
@@ -559,7 +580,6 @@ impl App {
                     },
                 };
                 host.subelements.push(Entry::new_host(title.to_string()));
-                host.sort();
                 self.closeaction();
             }
             CurrentAct::Remove(v) => {
@@ -605,6 +625,9 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+		// Collect pre-op hash of the model.
+		let hbefore = self.model_hash();
+
         // Check for hotkeys
         ctx.input_mut(|i| {
             if i.key_down(egui::Key::F4) {
@@ -646,33 +669,8 @@ impl eframe::App for App {
 					// Draw add button
                     ui.with_layout(Layout::right_to_left(egui::Align::Min), |ui| {
                         let popupid = Id::new("addbuttonID");
-                        let addbutton = ui.add_sized((20.0, 20.0), Button::new("+").frame(true));
-                        if addbutton.clicked() {
-                            // Raise add entry dialog on this entry host
-                            self.action = CurrentAct::Create(None, String::new());
-                        }
-
-                        if addbutton.secondary_clicked() {
-                            // Raise the popup if right clicked
-                            togglepopup(ui, popupid);
-                        }
-
-                        // Create popup
-                        popup_below_widget(
-                            ui,
-                            popupid,
-                            &addbutton,
-                            egui::PopupCloseBehavior::CloseOnClick,
-                            |ui| {
-                                ui.set_min_width(128.0);
-                                if ui.button("Add subtask").clicked() {
-                                    self.action = CurrentAct::Create(None, String::new());
-                                }
-                                if ui.button("Add sublist").clicked() {
-                                    self.action = CurrentAct::CreateHost(None, String::new());
-                                }
-                            },
-                        );
+                        let action = Self::show_addbutton(ui, None, popupid);
+						if action.some() {self.action = action}
                     });
                 });
             });
@@ -693,7 +691,7 @@ impl eframe::App for App {
         // construct body
         egui::CentralPanel::default().show(ctx, |ui| {
             // Show all tasks
-            self.tableview(ui);
+            self.show_tableview(ui);
 			
         });
 
@@ -702,6 +700,16 @@ impl eframe::App for App {
 			CurrentAct::Exit => {std::process::exit(0);},
 			CurrentAct::Remove(_) | CurrentAct::Cleanup | CurrentAct::Sort => self.applyaction(),
 			_ => {}
+		}
+		
+		// Collect post-op hash of main model.
+		let hnow = self.model_hash();
+
+		if hbefore != hnow {
+			// Perform automatic change actions when we have no pending action and there are changes to record.
+			self.data.entry.sort();
+			// Automatically save the list.
+
 		}
     }
 }

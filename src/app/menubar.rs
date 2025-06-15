@@ -26,7 +26,6 @@ pub fn draw_menubar(app: &mut App, ctx: &Context, ui: &mut Ui) {
 			draw_themeconfig(ctx, ui);
 
             // todo: show hotkeys in buttons
-            // todo: confirm exit
 
             // Exit program
             if ui.button("Exit").clicked() {
