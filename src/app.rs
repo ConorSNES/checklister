@@ -93,6 +93,8 @@ impl App {
     const TASK_NAME_DEFAULT: &str = "New Task";
 
     const KEYCOMBO_FIND: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, egui::Key::F);
+	const KEYCOMBO_ADD: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, egui::Key::N);
+	const KEYCOMBO_ADDLIST: KeyboardShortcut = KeyboardShortcut::new(Modifiers { alt: false, ctrl: false, shift: true, mac_cmd: false, command: true }, egui::Key::N);
 
     // Constructs view of all elements.
     fn tableview(&mut self, ui: &mut Ui) {
@@ -580,7 +582,7 @@ impl App {
                     panic!("An invalid index was on a removal action.")
                 };
                 // Reset the action
-                self.action = CurrentAct::None;
+                self.closeaction();
             }
 			CurrentAct::Cleanup => {
 				self.data.entry.cleanup();
@@ -622,6 +624,14 @@ impl eframe::App for App {
             if i.consume_shortcut(&Self::KEYCOMBO_FIND) {
                 self.action = CurrentAct::Find(String::new());
             }
+
+			if i.consume_shortcut(&Self::KEYCOMBO_ADDLIST) {
+				self.action = CurrentAct::CreateHost(None, "".to_owned());
+			}
+
+			if i.consume_shortcut(&Self::KEYCOMBO_ADD) {
+				self.action = CurrentAct::Create(None, "".to_owned());
+			}
         });
 
         // construct navpanel
