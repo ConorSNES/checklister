@@ -30,7 +30,7 @@ pub fn draw_menubar(app: &mut App, ctx: &Context, ui: &mut Ui) {
 
             // Exit program
             if ui.button("Exit").clicked() {
-				app.action = CurrentAct::Exit;
+				app.action = CurrentAct::Confirm(Box::new(CurrentAct::Exit));
             }
         });
     }
@@ -50,7 +50,7 @@ pub fn draw_menubar(app: &mut App, ctx: &Context, ui: &mut Ui) {
 			// Autosort pref
 
 			// Sort button
-			if ui.button("Sort").clicked() {
+			if ui.button("Sort now").clicked() {
 				app.action = CurrentAct::Sort;
 			}
 

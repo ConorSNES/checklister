@@ -60,6 +60,7 @@ impl CurrentAct {
             Self::Confirm(v) => v.as_ref().humantext(subject),
             Self::Remove(v) => format!("remove '{}'", subject.deepget(v).title.to_owned()),
             Self::Cleanup => "remove all completed tasks".to_owned(),
+			Self::Exit => "exit".to_owned(),
             _ => "undefined".to_owned(),
         }
     }
@@ -608,7 +609,7 @@ impl eframe::App for App {
         ctx.input_mut(|i| {
             if i.key_down(egui::Key::F4) {
                 // Terminate program if f4 is down.
-				self.action = CurrentAct::Exit;
+				self.action = CurrentAct::Confirm(Box::new(CurrentAct::Exit));
             }
 
             if i.key_down(egui::Key::Enter) {
