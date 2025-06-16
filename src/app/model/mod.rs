@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::app::model::traits::Filterable;
 
-pub fn make_sample_set() -> Model {
+pub fn _make_sample_set() -> Model {
     Model {
         entry: EntryHost {
             subelements: vec![

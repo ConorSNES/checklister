@@ -1,4 +1,4 @@
-use std::hash::{Hash, Hasher};
+use std::{hash::{Hash, Hasher}, time::Duration};
 use eframe::egui::{
     self, popup_below_widget, Button, Color32, Frame, Id, KeyboardShortcut, Label, Layout, Modal, Modifiers, RichText, ScrollArea, TextEdit, Ui
 };
@@ -69,25 +69,16 @@ impl CurrentAct {
 }
 
 // declaration of the application
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct App {
     data: Model,
     #[serde(skip)]
     action: CurrentAct,
 }
 
-impl Default for App {
-    fn default() -> Self {
-		let mut datamodel = model::make_sample_set();
-		datamodel.entry.sort();
-        Self {
-            data: datamodel,
-            action: CurrentAct::None,
-        }
-    }
-}
-
 impl App {
+	const PERSISTENCE_KEY: &str = "main";
+
     const COL_WHITE: Color32 = Color32::from_rgb(0xFF, 0xFF, 0xFF);
     const COL_GREY10: Color32 = Color32::from_rgb(0xF8, 0xF8, 0xF8);
     const COL_GREYDARK: Color32 = Color32::from_rgb(0x30, 0x30, 0x30);
@@ -98,6 +89,24 @@ impl App {
     const KEYCOMBO_FIND: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, egui::Key::F);
 	const KEYCOMBO_ADD: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, egui::Key::N);
 	const KEYCOMBO_ADDLIST: KeyboardShortcut = KeyboardShortcut::new(Modifiers { alt: false, ctrl: false, shift: true, mac_cmd: false, command: true }, egui::Key::N);
+
+	pub fn new(cc: &eframe::CreationContext) -> Self {
+		match cc.storage {
+			None => Self::default(),
+			Some(storage) => {
+				match eframe::get_value(storage, Self::PERSISTENCE_KEY) {
+					None => Self::default(),
+					Some(v) => v
+				}
+			}
+		}
+		/* model::make_sample_set();
+		datamodel.entry.sort();
+		Self {
+			data: datamodel,
+			..Default::default()
+		} */
+	}
 
 	// Returns a finished hash of the current elements.
 	fn model_hash(&self) -> u8 {
@@ -695,16 +704,18 @@ impl eframe::App for App {
 			DisplayType::None => {}
 		}
 
-        // construct body
+        // Construct main body
         egui::CentralPanel::default().show(ctx, |ui| {
+
             // Show all tasks
             self.show_tableview(ui);
-			
         });
 
-        // account for any applicable actions after layout paint
+        // Account for any applicable actions after layout paint
 		match self.action {
-			CurrentAct::Exit => {std::process::exit(0);},
+			CurrentAct::Exit => {
+				ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+			},
 			CurrentAct::Remove(_) | CurrentAct::Cleanup | CurrentAct::Sort => self.applyaction(),
 			_ => {}
 		}
@@ -715,8 +726,14 @@ impl eframe::App for App {
 		if hbefore != hnow {
 			// Perform automatic change actions when we have no pending action and there are changes to record.
 			self.data.entry.sort();
-			// Automatically save the list.
-
 		}
     }
+
+	fn save(&mut self, storage: &mut dyn eframe::Storage) {
+		eframe::set_value(storage, Self::PERSISTENCE_KEY, &self);
+	}
+
+	fn auto_save_interval(&self) -> std::time::Duration {
+		Duration::new(5, 10)
+	}
 }
