@@ -115,8 +115,8 @@ impl App {
                 let result = Self::drawinnerentryhost(ui, &mut self.data.entry, vec![], filter);
 
                 // If we have a new action from drawing, set the current action
-                if let Some(newact) = result.2 {
-                    self.action = newact;
+                if result.2.some() {
+                    self.action = result.2;
                 };
 
                 // Draw footer in small text if there's something to show.
@@ -201,8 +201,8 @@ impl App {
         subject: &mut EntryHost,
         index: Vec<usize>,
 		filter: &str,
-    ) -> (usize, usize, Option<CurrentAct>) {
-        let mut o = (0, 0, None);
+    ) -> (usize, usize, CurrentAct) {
+        let mut o = (0, 0, CurrentAct::None);
 
         // If there are no subelements, show the placeholder.
         if subject.subelements.len() == 0 {
@@ -220,7 +220,7 @@ impl App {
             o.0 += pending.0;
             o.1 += pending.1;
             // The newest action is returned if it is not an else.
-            o.2 = if pending.2 != None { pending.2 } else { o.2 };
+			if pending.2.some() {o.2 = pending.2};
         }
 
         o
@@ -295,7 +295,7 @@ impl App {
                 );
 			},
 			EntrySwitch::Host(_) => {
-                Self::show_addbutton(ui, Some(index.clone()), popupid);
+                action = Self::show_addbutton(ui, Some(index.clone()), popupid);
 			}
 		}
 		action
@@ -307,8 +307,8 @@ impl App {
         subject: &mut Entry,
         index: Vec<usize>,
 		filter: &str,
-    ) -> (usize, usize, Option<CurrentAct>) {
-		let mut o = (0, 0, None);
+    ) -> (usize, usize, CurrentAct) {
+		let mut o = (0, 0, CurrentAct::None);
 
 		// Skip if the filter cannot be applied.
 		if !subject.visible(filter) {return o;}
@@ -345,7 +345,7 @@ impl App {
 							// Add title.
 							if ui.label(v.title.clone()).double_clicked() {
 								// When doubleclicked, start editing this entry
-								o.2 = Some(CurrentAct::Edit(index.clone()));
+								o.2 = CurrentAct::Edit(index.clone());
 							};
 						}, 
 						|ui, v| {
@@ -354,7 +354,7 @@ impl App {
 
 						// Merge subjcompletion and subaction with o
 						if subjaction.some() {
-							o.2 = Some(subjaction);
+							o.2 = subjaction;
 						}
 						o.0 = subjcompletion.0;
 						o.1 = subjcompletion.1;
@@ -364,6 +364,7 @@ impl App {
 							let res = Self::drawinnerentryhost(ui, v, index, filter);
 							o.0 += res.0;
 							o.1 += res.1;
+							if res.2.some() {o.2 = res.2};
 
 							ui.add_space(4.0);
 
@@ -426,6 +427,8 @@ impl App {
                         }
                     });
 
+					ui.add_space(4.0);
+
                     // Block borrowing is weird, so we store the boolflags for cancelling and confirming out here (it doesn't like )
                     let mut canceled = false;
                     let mut confirmed = false;
@@ -465,6 +468,8 @@ impl App {
                         }
                     });
 
+					ui.add_space(4.0);
+
                     // Block borrowing is weird, so we store the boolflags for cancelling and confirming out here (it doesn't like )
                     let mut canceled = false;
                     let mut confirmed = false;
@@ -494,6 +499,8 @@ impl App {
                 }
                 CurrentAct::Edit(v) => {
                     ui.heading("Edit task");
+
+					ui.add_space(4.0);
 
                     let mut confirmed = false;
 
