@@ -1,4 +1,4 @@
-use std::{hash::{Hash, Hasher}, time::Duration};
+use std::{fs::File, hash::{Hash, Hasher}, io::Write, path::{Path, PathBuf}, time::Duration};
 use eframe::egui::{
     self, popup_below_widget, Button, Color32, Frame, Id, KeyboardShortcut, Label, Layout, Modal, Modifiers, RichText, ScrollArea, TextEdit, Ui
 };
@@ -21,11 +21,15 @@ enum DisplayType {
 enum CurrentAct {
     None,
     Confirm(Box<CurrentAct>),
+	Error(String),
     // Originally (and ideally), we use references to represent the target. This resulted in lifetime complications, so we use a (slightly more expensive?) index based method now.
     Create(Option<Vec<usize>>, String), // Create an ending member of targeted vector
     CreateHost(Option<Vec<usize>>, String), // Create a host member of targeted vector
     Edit(Vec<usize>),
     Remove(Vec<usize>),
+	New,
+	Import(PathBuf),
+	Export(PathBuf),
     Cleanup,
 	Sort,
 	Exit,
@@ -47,7 +51,7 @@ impl CurrentAct {
 	fn display(&self) -> DisplayType {
 		match self {
 			Self::None | Self::Cleanup | Self::Sort => DisplayType::None,
-			Self::Confirm(_) | Self::Create(_, _) | Self::CreateHost(_, _) => DisplayType::Modal,
+			Self::Error(_) | Self::Confirm(_) | Self::Create(_, _) | Self::CreateHost(_, _) => DisplayType::Modal,
 			Self::Find(_) | Self::Edit(_) => DisplayType::Inline,
 			_ => DisplayType::None
 		}
@@ -62,6 +66,8 @@ impl CurrentAct {
             Self::Confirm(v) => v.as_ref().humantext(subject),
             Self::Remove(v) => format!("remove '{}'", subject.deepget(v).title.to_owned()),
             Self::Cleanup => "remove all completed tasks".to_owned(),
+			Self::New => "start a new task list (previous data will be lost)".to_owned(),
+			Self::Import(v) => format!("import the list '{}' (previous data will be lost)", v.display()),
 			Self::Exit => "exit".to_owned(),
             _ => "undefined".to_owned(),
         }
@@ -86,9 +92,10 @@ impl App {
 
     const TASK_NAME_DEFAULT: &str = "New Task";
 
-    const KEYCOMBO_FIND: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, egui::Key::F);
-	const KEYCOMBO_ADD: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, egui::Key::N);
-	const KEYCOMBO_ADDLIST: KeyboardShortcut = KeyboardShortcut::new(Modifiers { alt: false, ctrl: false, shift: true, mac_cmd: false, command: true }, egui::Key::N);
+	pub const KEYCOMBO_EXIT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::NONE, egui::Key::F4);
+    pub const KEYCOMBO_FIND: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, egui::Key::F);
+	pub const KEYCOMBO_ADD: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, egui::Key::N);
+	pub const KEYCOMBO_ADDLIST: KeyboardShortcut = KeyboardShortcut::new(Modifiers { alt: false, ctrl: false, shift: true, mac_cmd: false, command: true }, egui::Key::N);
 
 	pub fn new(cc: &eframe::CreationContext) -> Self {
 		match cc.storage {
@@ -100,12 +107,6 @@ impl App {
 				}
 			}
 		}
-		/* model::make_sample_set();
-		datamodel.entry.sort();
-		Self {
-			data: datamodel,
-			..Default::default()
-		} */
 	}
 
 	// Returns a finished hash of the current elements.
@@ -113,6 +114,44 @@ impl App {
 		let mut hashobj = XorHasher::default();
 		self.data.hash(&mut hashobj);
 		hashobj.finish() as u8
+	}
+
+	fn export_model(&self, path : &Path) -> Option<String> {
+		// We need to handle error states for failing to create the target, serialize or writing to the new file.
+		match File::create(path) {
+			Err(err) => Some(format!("Could not create file: {}", err)),
+			Ok(mut outfile) => {
+				match serde_json::to_vec_pretty(&self.data) {
+					Err(err) => Some(format!("Could not serialize file: {}", err)),
+					Ok(stringified) => {
+						match outfile.write_all(&stringified ) {
+							Err(err) => Some(format!("Failed to write to file: {}", err)),
+							Ok(_) => None
+						}
+					}
+				}
+			}
+		}
+	}
+
+	fn import_model(&mut self, path : &Path) -> Option<String> {
+		// We need to handle error states for both failing to open the file and failing to parse the contents.
+		match std::fs::read(path) {
+			Result::Err(err) => Some(format!("Could not read file: {}", err)),
+			Result::Ok(infile) => {
+				match serde_json::from_slice(&infile) {
+					Result::Err(err) => Some(format!("Could not parse imported file: {}", err)),
+					Result::Ok(data) => {
+						self.data = data;
+						None
+					}
+				}
+			}
+		}
+	}
+
+	fn new_model(&mut self) {
+		self.data = Model::default();
 	}
 
     // Constructs view of all elements.
@@ -396,25 +435,28 @@ impl App {
     }
 
     // Constructs current inline dialog for actions that use this method.
-    fn dialogview(&mut self, ui: &mut Ui) {
-        if self.action == CurrentAct::None {
-            return;
-        }
+    fn show_action(&mut self, ui: &mut Ui) {
         Frame::new().inner_margin(8).show(ui, |ui| {
             match &mut self.action {
                 CurrentAct::Confirm(v) => {
                     let mut canceled = false;
                     let mut confirmed = false;
 
-                    ui.with_layout(Layout::right_to_left(egui::Align::Min), |ui| {
-                        canceled = ui.button("No").clicked();
-                        confirmed = ui.button("Yes").clicked();
-
-                        ui.label(format!(
+					ui.vertical_centered(|ui| {
+						ui.label(format!(
                             "Are sure you want to {}?",
                             v.humantext(&self.data.entry)
                         ));
-                    });
+
+						ui.add_space(4.0);
+
+						ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
+							ui.set_max_width(128.0);
+							
+							canceled = ui.button("No").clicked();
+							confirmed = ui.button("Yes").clicked();
+						});
+					});
 
                     if confirmed {
                         self.applyaction();
@@ -424,7 +466,15 @@ impl App {
                         self.closeaction();
                     }
                 }
-                CurrentAct::Create(v, title) => {
+				CurrentAct::Error(v) => {
+					// An error simply displays the current error.
+					ui.heading("Error");
+					ui.label(v.to_owned());
+					if ui.button("Dismiss").clicked() {
+						self.closeaction();
+					}
+				}
+				CurrentAct::Create(v, title) => {
                     // Draw heading
                     ui.heading(match v {
                         None => "Create task".to_owned(),
@@ -629,6 +679,25 @@ impl App {
 				self.data.entry.sort();
 				self.closeaction();
 			}
+			CurrentAct::Import(v) => {
+				
+				let v2 = v.clone(); // would have resulted in a cyclic borrow
+				if let Some(err) = self.import_model(v2.as_path()) {
+					self.action = CurrentAct::Error(err);
+				}
+				self.closeaction();
+			}
+			CurrentAct::Export(v) => {
+				let v2 = v.clone();
+				if let Some(err) = self.export_model(v2.as_path()) {
+					self.action = CurrentAct::Error(err);
+				}
+				self.closeaction();
+			}
+			CurrentAct::New => {
+				self.new_model();
+				self.closeaction();
+			}
 			_ => self.closeaction(),
         }
     }
@@ -646,10 +715,10 @@ impl eframe::App for App {
 
         // Check for hotkeys
         ctx.input_mut(|i| {
-            if i.key_down(egui::Key::F4) {
-                // Terminate program if f4 is down.
+			if i.consume_shortcut(&Self::KEYCOMBO_EXIT) {
+				// Terminate program if f4 is down.
 				self.action = CurrentAct::Confirm(Box::new(CurrentAct::Exit));
-            }
+			}
 
             if i.key_down(egui::Key::Enter) {
                 // Apply the current dialog if enter is down.
@@ -696,10 +765,10 @@ impl eframe::App for App {
 		let dt = self.action.display();
 		match dt {
 			DisplayType::Modal => {
-				Modal::new("info".into()).show(ctx, |ui| {self.dialogview(ui);});
+				Modal::new("info".into()).show(ctx, |ui| {self.show_action(ui);});
 			},
 			DisplayType::Inline => {
-				egui::TopBottomPanel::top("info").show(ctx, |ui| {self.dialogview(ui);});
+				egui::TopBottomPanel::top("info").show(ctx, |ui| {self.show_action(ui);});
 			},
 			DisplayType::None => {}
 		}
@@ -716,7 +785,12 @@ impl eframe::App for App {
 			CurrentAct::Exit => {
 				ctx.send_viewport_cmd(egui::ViewportCommand::Close);
 			},
-			CurrentAct::Remove(_) | CurrentAct::Cleanup | CurrentAct::Sort => self.applyaction(),
+			CurrentAct::Remove(_) 
+			| CurrentAct::Cleanup 
+			| CurrentAct::Sort 
+			| CurrentAct::Import(_) 
+			| CurrentAct::Export(_) 
+			| CurrentAct::New => self.applyaction(),
 			_ => {}
 		}
 		
@@ -734,6 +808,6 @@ impl eframe::App for App {
 	}
 
 	fn auto_save_interval(&self) -> std::time::Duration {
-		Duration::new(5, 10)
+		Duration::new(5, 0)
 	}
 }

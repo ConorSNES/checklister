@@ -1,4 +1,5 @@
-use eframe::egui::{Context, Ui};
+use eframe::egui::{Button, Context, Response, Ui, Widget, WidgetText};
+use rfd::FileDialog;
 
 use crate::app::{App, CurrentAct};
 
@@ -11,25 +12,29 @@ pub fn draw_menubar(app: &mut App, ctx: &Context, ui: &mut Ui) {
             // File menu popup contents
             ui.set_min_width(120.0);
 
+			if ui.button("New list").clicked() {
+				app.action = CurrentAct::Confirm(Box::new(CurrentAct::New));
+			}
+
+			ui.separator();
+
             // Export function (pending implementation)
-            if ui.button("Export tasks...").clicked() {
-                println!("Export unimplemented!");
+            if ui.button("Export json...").clicked() {
+                do_export(app);
             }
 
             // Import function (pending implementation)
-            if ui.button("Import tasks...").clicked() {
-                println!("Import unimplemented!");
+            if ui.button("Import json...").clicked() {
+                do_import(app);
             }
 
             ui.separator();
 
-			draw_themeconfig(ctx, ui);
-
-            // todo: show hotkeys in buttons
+            draw_themeconfig(ctx, ui);
 
             // Exit program
-            if ui.button("Exit").clicked() {
-				app.action = CurrentAct::Confirm(Box::new(CurrentAct::Exit));
+            if shortcutbutton(ui, "Exit", "F4").clicked() {
+                app.action = CurrentAct::Confirm(Box::new(CurrentAct::Exit));
             }
         });
     }
@@ -40,18 +45,18 @@ pub fn draw_menubar(app: &mut App, ctx: &Context, ui: &mut Ui) {
             ui.set_min_width(120.0);
 
             // Find entry utility (pending implementation)
-            if ui.button("Find").clicked() {
+            if shortcutbutton(ui, "Find", ctx.format_shortcut(&App::KEYCOMBO_FIND)).clicked() {
                 app.action = CurrentAct::Find(String::new());
             }
 
-			ui.separator();
+            ui.separator();
 
-			// Autosort pref
+            // Autosort pref
 
-			// Sort button
-			if ui.button("Sort now").clicked() {
-				app.action = CurrentAct::Sort;
-			}
+            // Sort button
+            if ui.button("Sort now").clicked() {
+                app.action = CurrentAct::Sort;
+            }
 
             // Clean up button
             if ui.button("Cleanup").clicked() {
@@ -73,4 +78,34 @@ fn draw_themeconfig(ctx: &Context, ui: &mut Ui) {
         ui.radio_value(&mut theme, eframe::egui::Theme::Dark, "Dark");
         ctx.set_theme(theme);
     });
+}
+
+// Showing a button with a shortcut
+fn shortcutbutton(ui: &mut Ui, text: impl Into<WidgetText>, shortcut: impl Into<WidgetText>) -> Response {
+	Button::new(text).shortcut_text(shortcut).ui(ui)
+}
+
+fn imp_exp_dialog() -> FileDialog {
+	FileDialog::new()
+	.add_filter("json", &["json"])
+	.add_filter("All files", &[""])
+	.set_directory("/")
+}
+
+fn do_import(app: &mut App) {
+	// Query user for target file
+	let targpath = imp_exp_dialog().set_title("Import from...").pick_file();
+
+	if let Some(v) = targpath {
+		app.action = CurrentAct::Confirm(Box::new(CurrentAct::Import(v)));
+	}
+}
+
+fn do_export(app: &mut App) {
+	// Query user for target file
+	let targpath = imp_exp_dialog().set_title("Export to...").save_file();
+
+	if let Some(v) = targpath {
+		app.action = CurrentAct::Export(v);
+	}
 }
