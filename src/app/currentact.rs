@@ -12,6 +12,7 @@ pub enum CurrentAct {
     Create(Option<Vec<usize>>, String), // Create an ending member of targeted vector
     CreateHost(Option<Vec<usize>>, String), // Create a host member of targeted vector
     Edit(Vec<usize>),
+    Info(Vec<usize>),
     Remove(Vec<usize>),
 	New,
 	Import(PathBuf),
@@ -53,7 +54,7 @@ impl DisplayTyped for CurrentAct {
     fn display(&self) -> DisplayType {
         match self {
 			Self::None | Self::Cleanup | Self::Sort => DisplayType::None,
-			Self::Error(_) | Self::Confirm(_) | Self::Create(_, _) | Self::CreateHost(_, _) => DisplayType::Modal,
+			Self::Error(_) | Self::Confirm(_) | Self::Create(_, _) | Self::CreateHost(_, _) | Self::Info(_) => DisplayType::Modal,
 			Self::Find(_) | Self::Edit(_) => DisplayType::Inline,
 			_ => DisplayType::None
 		}

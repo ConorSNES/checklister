@@ -282,6 +282,18 @@ impl EntryHost {
         Some(max)
     }
 
+    // Collect total completed in this host
+    pub fn totalcompleted(&self) -> usize {
+        let mut total = 0;
+        for v in &self.subelements {
+            total += match v.completed() {
+                None => 0,
+                Some(_) => 1
+            };
+        }
+        total
+    }
+
     // Recursive sort for entryhost contents
     pub fn sort(&mut self) {
         // Sort the internals if we're able

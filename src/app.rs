@@ -1,6 +1,7 @@
+use core::f32;
 use std::{fs::File, hash::{Hash, Hasher}, io::Write, path::Path, time::Duration};
 use eframe::egui::{
-    self, popup_below_widget, Button, Color32, Frame, Id, KeyboardShortcut, Label, Layout, Modal, Modifiers, RichText, ScrollArea, TextEdit, Ui
+    self, popup_below_widget, Button, Color32, FontSelection, Frame, Id, KeyboardShortcut, Label, Layout, Modal, Modifiers, RichText, ScrollArea, TextEdit, Ui
 };
 use model::{Entry, EntryHost, EntrySwitch, Model};
 use serde::{Deserialize, Serialize};
@@ -30,7 +31,12 @@ impl App {
     const COL_DARK: Color32 = Color32::from_rgb(0x1B, 0x1B, 0x1B);
 
     const TASK_NAME_DEFAULT: &str = "New Task";
+    const NOTES_TEXT_DEFAULT: &str = "Add notes...";
 
+    pub const KEYCOMBO_NOTES_NEWLINE: KeyboardShortcut = KeyboardShortcut::new(Modifiers::SHIFT, egui::Key::Enter);
+
+    pub const KEYCOMBO_SUBMIT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::NONE, egui::Key::Enter);
+    pub const KEYCOMBO_DISMISS: KeyboardShortcut = KeyboardShortcut::new(Modifiers::NONE, egui::Key::Escape);
 	pub const KEYCOMBO_EXIT: KeyboardShortcut = KeyboardShortcut::new(Modifiers::NONE, egui::Key::F4);
     pub const KEYCOMBO_FIND: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, egui::Key::F);
 	pub const KEYCOMBO_ADD: KeyboardShortcut = KeyboardShortcut::new(Modifiers::COMMAND, egui::Key::N);
@@ -173,7 +179,11 @@ impl App {
 					);
 				}
 				if let Some(i) = &index {
-					if ui.button("Delete this list").clicked() {
+                    if ui.button("Info").clicked() {
+                        action = CurrentAct::Info(i.clone());
+                    }
+
+					if ui.button("Delete").clicked() {
 						action = CurrentAct::Remove(i.clone());
 					}
 				}
@@ -266,6 +276,9 @@ impl App {
                         ui.set_min_width(128.0);
                         if ui.button("Edit").clicked() {
                             action = CurrentAct::Edit(index.clone());
+                        }
+                        if ui.button("Info").clicked() {
+                            action = CurrentAct::Info(index.clone());
                         }
                         if ui.button("Delete").clicked() {
                             action = 
@@ -389,9 +402,9 @@ impl App {
 
 						ui.add_space(4.0);
 
-						ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
+						ui.with_layout(Layout::right_to_left(egui::Align::Min), |ui| {
 							ui.set_max_width(128.0);
-							
+
 							canceled = ui.button("No").clicked();
 							confirmed = ui.button("Yes").clicked();
 						});
@@ -509,12 +522,90 @@ impl App {
                         // Main text box
                         ui.add(
                             TextEdit::singleline(&mut self.data.entry.deepget_mut(v).title)
+                                .hint_text(Self::TASK_NAME_DEFAULT)
                                 .desired_width(f32::INFINITY),
                         )
                         .request_focus();
                     });
 
                     if confirmed {
+                        self.action = CurrentAct::None;
+                    }
+                }
+                CurrentAct::Info(v) => {
+                    let value = self.data.entry.deepget_mut(v);
+
+                    ui.add(
+                        TextEdit::singleline(&mut value.title).desired_width(f32::INFINITY).font(FontSelection::Style(egui::TextStyle::Heading)).hint_text(Self::TASK_NAME_DEFAULT),
+                    );
+                    ui.separator();
+
+                    // change layout depending on hosting or ending state
+                    match &mut value.data {
+                        EntrySwitch::End(subval) => {
+                            //ui.label("Notes:");
+                            ui.add(
+                                TextEdit::multiline(&mut subval.body)
+                                .desired_rows(3)
+                                .desired_width(f32::INFINITY)
+                                .return_key(Self::KEYCOMBO_NOTES_NEWLINE)
+                                .hint_text(Self::NOTES_TEXT_DEFAULT)
+                            );
+                            ui.add(Label::new(
+                                RichText::new(
+                                    format!(
+                                        "You can add new lines using {}.", ui.ctx().format_shortcut(&Self::KEYCOMBO_NOTES_NEWLINE) 
+                                    )).italics()));
+
+                            ui.add_space(8.0);
+
+                            ui.label(format!("Created on: {}", subval.added.format("%d/%m/%Y %H:%M:%S")));
+                            match &subval.completed {
+                                None => {
+                                    ui.label("Task has not been completed.");
+                                }
+                                Some(v) => {
+                                    let delta = v.signed_duration_since(subval.added);
+                                    //let deltastring = format!("{}d, {}:{}:{}:{}", delta.num_days(), delta.num_hours(), delta.num_minutes(), delta.num_seconds(), delta.num_milliseconds());
+                                    ui.label(format!("Completed on: {}\nTime to complete: {}s", v.format("%d/%m/%Y %H:%M:%S"), delta.num_seconds()));
+                                }
+                            }
+                        },
+                        EntrySwitch::Host(subval) => {
+                            let len = subval.subelements.len();
+                            if len > 0 {
+                                // Get some numbers
+                                let date = subval.date().format("%d/%m/%Y %H:%M:%S");
+                                let completed = subval.totalcompleted();
+                                ui.label(format!(
+                                    "Newest date: {}\n\nTotal tasks: {}\nComplete: {}\nIncomplete: {}", 
+                                    date,
+                                    len, 
+                                    completed, 
+                                    len-completed
+                                ));
+                            }
+                            else {
+                                ui.label("No newest date.\n\nNo contained tasks.");
+                            }
+                            
+                        }
+                    }
+
+                    // Handle footer/exit button
+                    ui.separator();
+                    let mut canceled = false;
+                    ui.horizontal(|ui| {
+                        match &value.data {
+                            EntrySwitch::End(_) => ui.label("Type: Task"),
+                            EntrySwitch::Host(_) => ui.label("Type: Sublist"),
+                        };
+                        ui.with_layout(Layout::right_to_left(egui::Align::Min), |ui| {
+                            canceled = ui.button("Close").clicked();
+                        });
+                    });
+                    
+                    if canceled {
                         self.action = CurrentAct::None;
                     }
                 }
@@ -652,36 +743,6 @@ impl eframe::App for App {
 		// Collect pre-op hash of the model.
 		let hbefore = self.model_hash();
 
-        // Check for hotkeys
-        ctx.input_mut(|i| {
-			if i.consume_shortcut(&Self::KEYCOMBO_EXIT) {
-				// Terminate program if f4 is down.
-				self.action = CurrentAct::Confirm(Box::new(CurrentAct::Exit));
-			}
-
-            if i.key_down(egui::Key::Enter) {
-                // Apply the current dialog if enter is down.
-                self.applyaction();
-            }
-
-            if i.key_down(egui::Key::Escape) {
-                // Close the current dialog if enter is down.
-                self.closeaction();
-            }
-
-            if i.consume_shortcut(&Self::KEYCOMBO_FIND) {
-                self.action = CurrentAct::Find(String::new());
-            }
-
-			if i.consume_shortcut(&Self::KEYCOMBO_ADDLIST) {
-				self.action = CurrentAct::CreateHost(None, "".to_owned());
-			}
-
-			if i.consume_shortcut(&Self::KEYCOMBO_ADD) {
-				self.action = CurrentAct::Create(None, "".to_owned());
-			}
-        });
-
         // construct navpanel
         egui::TopBottomPanel::top("navigation").show(ctx, |ui| {
             ui.horizontal_centered(|ui| {
@@ -711,6 +772,39 @@ impl eframe::App for App {
 			},
 			DisplayType::None => {}
 		}
+
+        // Check for hotkeys
+        ctx.input_mut(|i| {
+			if i.consume_shortcut(&Self::KEYCOMBO_EXIT) {
+				// Terminate program if f4 is down.
+				self.action = CurrentAct::Confirm(Box::new(CurrentAct::Exit));
+			}
+
+            // Consume newlines for no action.
+            let _ = i.consume_shortcut(&Self::KEYCOMBO_NOTES_NEWLINE);
+
+            if i.consume_shortcut(&Self::KEYCOMBO_SUBMIT) {
+                // Apply the current dialog if enter is down.
+                self.applyaction();
+            }
+
+            if i.consume_shortcut(&Self::KEYCOMBO_DISMISS) {
+                // Close the current dialog if enter is down.
+                self.closeaction();
+            }
+
+            if i.consume_shortcut(&Self::KEYCOMBO_FIND) {
+                self.action = CurrentAct::Find(String::new());
+            }
+
+			if i.consume_shortcut(&Self::KEYCOMBO_ADDLIST) {
+				self.action = CurrentAct::CreateHost(None, "".to_owned());
+			}
+
+			if i.consume_shortcut(&Self::KEYCOMBO_ADD) {
+				self.action = CurrentAct::Create(None, "".to_owned());
+			}
+        });
 
         // Construct main body
         egui::CentralPanel::default().show(ctx, |ui| {
