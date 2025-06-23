@@ -1,8 +1,8 @@
 # About
 
-Checklist application, created to learn egui framework.
+Checklist application, created to learn egui framework. (Will probably break (because of modal system) in newer versions of egui, be warned)
 
-# Software and codebase licence
+# Software and Codebase Licence
 
 Copyright 2025 Conor SS
 
