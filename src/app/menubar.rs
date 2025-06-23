@@ -1,7 +1,7 @@
 use eframe::egui::{Button, Context, Response, Ui, Widget, WidgetText};
 use rfd::FileDialog;
 
-use crate::app::{App, CurrentAct};
+use crate::app::{currentact, App, CurrentAct};
 
 pub fn draw_menubar(app: &mut App, ctx: &Context, ui: &mut Ui) {
     // Add navigation buttons.
@@ -61,6 +61,20 @@ pub fn draw_menubar(app: &mut App, ctx: &Context, ui: &mut Ui) {
             // Clean up button
             if ui.button("Cleanup").clicked() {
                 app.action = CurrentAct::Confirm(Box::new(CurrentAct::Cleanup));
+            }
+        });
+    }
+    {
+        // Help menu
+        ui.menu_button("Help", |ui| {
+            ui.set_min_width(120.0);
+
+            if ui.button("Usage hints").clicked() {
+                app.action = currentact::hints();
+            }
+
+            if ui.button("About").clicked() {
+                app.action = currentact::appinfo();
             }
         });
     }

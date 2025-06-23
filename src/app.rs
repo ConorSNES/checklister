@@ -192,6 +192,18 @@ impl App {
 		action
 	}
 
+    fn show_modalclosebutton(&mut self, ui: &mut Ui) {
+        if ui.button("Close").clicked() {
+            self.closeaction();
+        }
+    }
+
+    /* fn show_modalapplybutton(&mut self, ui: &mut Ui) {
+        if ui.button("Apply").clicked() {
+            self.applyaction();
+        }
+    } */
+
     // Wraps many drawentry(s) together.
     fn drawinnerentryhost(
         ui: &mut Ui,
@@ -418,7 +430,14 @@ impl App {
                         self.closeaction();
                     }
                 }
-				CurrentAct::Error(v) => {
+				CurrentAct::Message(title, body) => {
+                    ui.heading(title);
+                    ui.add_space(8.0);
+                    ui.label(body.to_owned());
+                    ui.add_space(8.0);
+                    self.show_modalclosebutton(ui);
+                }
+                CurrentAct::Error(v) => {
 					// An error simply displays the current error.
 					ui.heading("Error");
 					ui.label(v.to_owned());
@@ -762,16 +781,19 @@ impl eframe::App for App {
         });
 
         // Show current edit modal, if one is present
-		let dt = self.action.display();
-		match dt {
-			DisplayType::Modal => {
-				Modal::new("info".into()).show(ctx, |ui| {self.show_action(ui);});
-			},
-			DisplayType::Inline => {
-				egui::TopBottomPanel::top("info").show(ctx, |ui| {self.show_action(ui);});
-			},
-			DisplayType::None => {}
-		}
+		{
+            let dt = self.action.display();
+            let disid = Id::new(&self.action);
+            match dt {
+                DisplayType::Modal => {
+                    Modal::new(disid).show(ctx, |ui| {self.show_action(ui);});
+                },
+                DisplayType::Inline => {
+                    egui::TopBottomPanel::top(disid).show(ctx, |ui| {self.show_action(ui);});
+                },
+                DisplayType::None => {}
+            }
+        }
 
         // Check for hotkeys
         ctx.input_mut(|i| {
