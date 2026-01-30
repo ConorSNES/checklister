@@ -84,7 +84,7 @@ pub fn appinfo() -> CurrentAct {
         format!("{}
 
 Version:  {}
-Authored by Conor SS 2025
+Authored by Conor SS 2025-2026
 Software licence: {}",
         name, version, licence
     ))

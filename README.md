@@ -1,10 +1,13 @@
-# About
+# ![icon](./icon/48_checklister.png) Checklister
+
+
+## About
 
 Checklist application, created to learn egui framework. (Will probably break (because of modal system) in newer versions of egui, be warned)
 
-# Software and Codebase Licence
+## Software and Codebase Licence
 
-Copyright 2025 Conor SS
+Copyright (c) 2025-2026 Conor SS
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
