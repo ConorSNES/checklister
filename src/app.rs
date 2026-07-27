@@ -1,5 +1,5 @@
 use core::f32;
-use std::{fs::File, hash::{Hash, Hasher}, io::Write, path::Path, time::Duration};
+use std::{fs::File, hash::{Hash, Hasher}, io::Write, mem::discriminant, path::Path, time::Duration};
 use eframe::egui::{
     self, popup_below_widget, Button, Color32, FontSelection, Frame, Id, KeyboardShortcut, Label, Layout, Modal, Modifiers, RichText, ScrollArea, TextEdit, Ui
 };
@@ -452,7 +452,7 @@ impl App {
                         Some(v) => {
                             format!(
                                 "Create subtask for {}",
-                                self.data.entry.deepget_mut(v).title
+                                self.data.entry.deepget(v).title
                             )
                         }
                     });
@@ -625,7 +625,7 @@ impl App {
                     });
                     
                     if canceled {
-                        self.action = CurrentAct::None;
+                        self.closeaction();
                     }
                 }
                 CurrentAct::Find(v) => {
@@ -783,7 +783,8 @@ impl eframe::App for App {
         // Show current edit modal, if one is present
 		{
             let dt = self.action.display();
-            let disid = Id::new(&self.action);
+            let disid = Id::new(discriminant(&self.action));
+
             match dt {
                 DisplayType::Modal => {
                     Modal::new(disid).show(ctx, |ui| {self.show_action(ui);});
@@ -811,7 +812,7 @@ impl eframe::App for App {
             }
 
             if i.consume_shortcut(&Self::KEYCOMBO_DISMISS) {
-                // Close the current dialog if enter is down.
+                // Close the current dialog if escape is down.
                 self.closeaction();
             }
 
