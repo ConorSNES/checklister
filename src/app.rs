@@ -33,7 +33,7 @@ impl App {
     const TASK_NAME_DEFAULT: &str = "New Task";
     const NOTES_TEXT_DEFAULT: &str = "Add notes...";
 
-    const TASKS_PLACEHOLDER_IMAGE: egui::ImageSource<'_> = include_image!("../media/icon_subtle.png");
+    const TASKS_PLACEHOLDER_IMAGE: egui::ImageSource<'_> = include_image!("../media/empty.png");
 
     pub const KEYCOMBO_NOTES_NEWLINE: KeyboardShortcut = KeyboardShortcut::new(Modifiers::SHIFT, egui::Key::Enter);
 
