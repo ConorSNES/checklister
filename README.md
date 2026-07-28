@@ -1,12 +1,11 @@
 # ![icon](./icon/48_checklister.png) Checklister
 
+||||
+|---|---|---|
 
 ## About
 
 Checklist application created to learn eframe framework, aiming to be highly portable and simple to use.
-
-> [!IMPORTANT]
-> Will probably break (because of usage of modal system) in newer versions of egui, keep this in mind when updating packages
 
 ## Features
 
