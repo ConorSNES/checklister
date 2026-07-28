@@ -1,6 +1,6 @@
 # ![icon](./icon/48_checklister.png) Checklister
 
-||||
+|![main screen, blank](./_screenshots/mainscreen_0.png)|![main screen, many tasks](./_screenshots/mainscreen_1.png)|![main screen, info menu](./_screenshots/mainscreen_2.png)|
 |---|---|---|
 
 ## About
@@ -12,6 +12,7 @@ Checklist application created to learn eframe framework, aiming to be highly por
 - single executable (all data compiled into program)
 - cross-platform
 - light/dark theme support (including automatic setting, based on your OS preference)
+- hotkeys
 - persistent storage- close program, pick up where you left off automatically
 - nested checklists
 - import/export checklists to JSON format
