@@ -1,9 +1,9 @@
-use eframe::egui::{Button, Context, Response, Ui, Widget, WidgetText};
+use eframe::egui::{Button, Response, Ui, Widget, WidgetText};
 use rfd::FileDialog;
 
 use crate::app::{currentact, App, CurrentAct};
 
-pub fn draw_menubar(app: &mut App, ctx: &Context, ui: &mut Ui) {
+pub fn draw_menubar(app: &mut App, ui: &mut Ui) {
     // Add navigation buttons.
     ui.style_mut().visuals.button_frame = false;
     {
@@ -30,7 +30,7 @@ pub fn draw_menubar(app: &mut App, ctx: &Context, ui: &mut Ui) {
 
             ui.separator();
 
-            draw_themeconfig(ctx, ui);
+            draw_themeconfig(ui);
 
             // Exit program
             if shortcutbutton(ui, "Exit", "F4").clicked() {
@@ -45,7 +45,7 @@ pub fn draw_menubar(app: &mut App, ctx: &Context, ui: &mut Ui) {
             ui.set_min_width(120.0);
 
             // Find entry utility (pending implementation)
-            if shortcutbutton(ui, "Find", ctx.format_shortcut(&App::KEYCOMBO_FIND)).clicked() {
+            if shortcutbutton(ui, "Find", ui.ctx().format_shortcut(&App::KEYCOMBO_FIND)).clicked() {
                 app.action = CurrentAct::Find(String::new());
             }
 
@@ -80,17 +80,17 @@ pub fn draw_menubar(app: &mut App, ctx: &Context, ui: &mut Ui) {
     }
 }
 
-fn draw_themeconfig(ctx: &Context, ui: &mut Ui) {
+fn draw_themeconfig(ui: &mut Ui) {
     ui.menu_button("Theme", |ui| {
-        let mut theme = ctx.theme();
+        let mut theme = ui.theme();
         ui.radio_value(
             &mut theme,
-            ctx.system_theme().unwrap_or(eframe::egui::Theme::Dark),
+            ui.system_theme().unwrap_or(eframe::egui::Theme::Dark),
             "Match System",
         );
         ui.radio_value(&mut theme, eframe::egui::Theme::Light, "Light");
         ui.radio_value(&mut theme, eframe::egui::Theme::Dark, "Dark");
-        ctx.set_theme(theme);
+        ui.set_theme(theme);
     });
 }
 

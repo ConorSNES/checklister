@@ -3,7 +3,23 @@
 
 ## About
 
-Checklist application, created to learn egui framework. (Will probably break (because of modal system) in newer versions of egui, be warned)
+Checklist application created to learn eframe framework, aiming to be highly portable and simple to use.
+
+> [!IMPORTANT]
+> Will probably break (because of usage of modal system) in newer versions of egui, keep this in mind when updating packages
+
+## Features
+
+- single executable (all data compiled into program)
+- cross-platform
+- light/dark theme support (including automatic setting, based on your OS preference)
+- persistent storage- close program, pick up where you left off automatically
+- nested checklists
+- import/export checklists to JSON format
+
+## Development
+
+Compilation using `cargo`. Compile is tested on Linux and Windows (*awaiting test since changing build setup*). Compilation should automatically add icon to Windows program.
 
 ## Software and Codebase Licence
 

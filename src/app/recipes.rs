@@ -1,4 +1,4 @@
-use eframe::egui::{self, Id, Layout, Ui};
+use eframe::egui::{self, Layout, Ui};
 
 // Library of generic "recipes" for use everywhere and in future projects for fixing headache (and sometimes causing new ones)
 
@@ -49,9 +49,4 @@ pub fn drawtriple_mutpass<R, T>(
 			});
 		});
 	}); 
-}
-
-// Recipe for popup draw toggle
-pub fn togglepopup(ui: &mut Ui, id: Id) {
-	ui.memory_mut(|mem| mem.toggle_popup(id));
 }

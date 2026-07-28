@@ -22,9 +22,13 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
 
+
     eframe::run_native(
         "Checklister",
         options,
-        Box::new(|cc| Ok(Box::new(App::new(cc)))),
+        Box::new(|cc| {
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+            Ok(Box::new(App::new(cc)))
+        }),
     )
 }

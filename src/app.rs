@@ -1,11 +1,11 @@
 use core::f32;
 use std::{fs::File, hash::{Hash, Hasher}, io::Write, mem::discriminant, path::Path, time::Duration};
 use eframe::egui::{
-    self, popup_below_widget, Button, Color32, FontSelection, Frame, Id, KeyboardShortcut, Label, Layout, Modal, Modifiers, RichText, ScrollArea, TextEdit, Ui
+    self, Button, Color32, FontSelection, Frame, Id, Image, KeyboardShortcut, Label, Layout, Modal, Modifiers, RichText, ScrollArea, TextEdit, Ui, include_image,
 };
 use model::{Entry, EntryHost, EntrySwitch, Model};
 use serde::{Deserialize, Serialize};
-use crate::app::{currentact::CurrentAct, displaytyped::{DisplayType, DisplayTyped}, model::{traits::Filterable, EntryEnd}, recipes::{drawtriple_mutpass, togglepopup}, xorhasher::XorHasher};
+use crate::app::{currentact::CurrentAct, displaytyped::{DisplayType, DisplayTyped}, model::{traits::Filterable, EntryEnd}, recipes::drawtriple_mutpass, xorhasher::XorHasher};
 
 pub mod model;
 pub mod xorhasher;
@@ -32,6 +32,8 @@ impl App {
 
     const TASK_NAME_DEFAULT: &str = "New Task";
     const NOTES_TEXT_DEFAULT: &str = "Add notes...";
+
+    const TASKS_PLACEHOLDER_IMAGE: egui::ImageSource<'_> = include_image!("../media/icon_subtle.png");
 
     pub const KEYCOMBO_NOTES_NEWLINE: KeyboardShortcut = KeyboardShortcut::new(Modifiers::SHIFT, egui::Key::Enter);
 
@@ -156,17 +158,10 @@ impl App {
 			action = CurrentAct::Create(index.clone(), String::new());
 		}
 
-		if addbutton.secondary_clicked() {
-			// Raise popup menu for adding items
-			togglepopup(ui, popupid);
-		}
-
 		// Create popup
-		popup_below_widget(
-			ui,
-			popupid,
-			&addbutton,
-			egui::PopupCloseBehavior::CloseOnClick,
+        egui::Popup::context_menu(&addbutton)
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClick)
+        .id(popupid).show(
 			|ui| {
 				ui.set_min_width(128.0);
 				if ui.button("Add subtask").clicked() {
@@ -215,7 +210,10 @@ impl App {
 
         // If there are no subelements, show the placeholder.
         if subject.subelements.len() == 0 {
-            ui.vertical_centered(|ui| ui.label(RichText::new("No content.").italics()));
+            ui.vertical_centered(|ui| {
+                ui.add(Image::new(Self::TASKS_PLACEHOLDER_IMAGE).max_width(32.0));
+                ui.label(RichText::new("No content.").italics());
+            });
         }
         for i in 0..subject.subelements.len() {
             // Collect the nested subject
@@ -273,17 +271,10 @@ impl App {
                     [20.0, 20.0],
                     Button::new(RichText::new("...").weak()).fill(Color32::TRANSPARENT),
                 );
-
-                if menuresp.clicked() | menuresp.secondary_clicked() {
-                    // Raise the popup upon right clicking
-                    togglepopup(ui, popupid);
-                }
-
-                popup_below_widget(
-                    ui,
-                    popupid,
-                    &menuresp,
-                    egui::PopupCloseBehavior::CloseOnClick,
+                
+                egui::Popup::menu(&menuresp)
+                    .close_behavior(egui::PopupCloseBehavior::CloseOnClick)
+                    .id(popupid).show(
                     |ui| {
                         ui.set_min_width(128.0);
                         if ui.button("Edit").clicked() {
@@ -758,17 +749,18 @@ impl App {
 }
 
 impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+
 		// Collect pre-op hash of the model.
 		let hbefore = self.model_hash();
 
         // construct navpanel
-        egui::TopBottomPanel::top("navigation").show(ctx, |ui| {
+        egui::Panel::top("navigation").show(ui, |ui| {
             ui.horizontal_centered(|ui| {
                 // Wrap these elements in a panel for improved layout
                 Frame::new().inner_margin(4.0).show(ui, |ui| {
 					// Draw menubar/navbar
-                    menubar::draw_menubar(self, ctx, ui);
+                    menubar::draw_menubar(self, ui);
 
 					// Draw add button
                     ui.with_layout(Layout::right_to_left(egui::Align::Min), |ui| {
@@ -787,17 +779,17 @@ impl eframe::App for App {
 
             match dt {
                 DisplayType::Modal => {
-                    Modal::new(disid).show(ctx, |ui| {self.show_action(ui);});
+                    Modal::new(disid).show(ui.ctx(), |ui| {self.show_action(ui);});
                 },
                 DisplayType::Inline => {
-                    egui::TopBottomPanel::top(disid).show(ctx, |ui| {self.show_action(ui);});
+                    egui::Panel::top(disid).show(ui, |ui| {self.show_action(ui);});
                 },
                 DisplayType::None => {}
             }
         }
 
         // Check for hotkeys
-        ctx.input_mut(|i| {
+        ui.ctx().input_mut(|i| {
 			if i.consume_shortcut(&Self::KEYCOMBO_EXIT) {
 				// Terminate program if f4 is down.
 				self.action = CurrentAct::Confirm(Box::new(CurrentAct::Exit));
@@ -830,7 +822,7 @@ impl eframe::App for App {
         });
 
         // Construct main body
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
 
             // Show all tasks
             self.show_tableview(ui);
@@ -839,7 +831,7 @@ impl eframe::App for App {
         // Account for any applicable actions after layout paint
 		match self.action {
 			CurrentAct::Exit => {
-				ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+				ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
 			},
 			CurrentAct::Remove(_) 
 			| CurrentAct::Cleanup 
