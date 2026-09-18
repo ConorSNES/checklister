@@ -25,3 +25,7 @@ serde_json = "1.0.139"
 [[bench]]
 name = "hash-bench"
 harness = false
+
+[profile.release]
+strip = true
+lto = true
