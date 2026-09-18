@@ -1,0 +1,108 @@
+name: release
+
+on:
+  push:
+    branches: 
+      - 'release'
+  workflow_dispatch:
+    value: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  enforce-tag:
+    name: Enforce semver tagging
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+    - name: Pull semver of commit
+      id: semver
+      uses: SebRollen/toml-action@v1.2.0
+      with:
+        file: 'Cargo.toml'
+        field: 'package.version'
+    - name: Create semver tag
+      run: git tag "v${{ steps.semver.outputs.value }}"
+    - name: Push semver tag
+      run: git push origin "v${{ steps.semver.outputs.value }}"
+
+  build-artefacts:
+    needs: enforce-tag
+
+    strategy:
+      matrix:
+        os: 
+          - {
+            name: ubuntu-latest,
+            fname: linux_x86-64,
+            exe: ""
+          }
+          - {
+            name: windows-latest,
+            fname: windows_x86-64,
+            exe: ".exe"
+          }
+    name: Compile artefacts for ${{ matrix.os.name }}
+
+    runs-on: ${{ matrix.os.name }}
+
+    steps:
+    - uses: actions/checkout@v7
+    - name: Rust Cache
+      uses: Swatinem/rust-cache@v2.9.2
+      with:
+        key: ${{ matrix.os.name }}
+    - name: Pull current semver
+      id: semver
+      uses: SebRollen/toml-action@v1.2.0
+      with:
+        file: 'Cargo.toml'
+        field: 'package.version'
+    - name: Build program
+      run: cargo build --verbose -r
+    - name: Compose zip archive
+      uses: thedoctor0/zip-release@0.7.5
+      with:
+        type: 'zip'
+        filename: ${{ matrix.os.fname }}_v${{ steps.semver.outputs.value }}.zip
+        path: ./target/release/timekeeper${{ matrix.os.exe }}
+    - name: Upload artefact
+      uses: actions/upload-artifact@v7.0.1
+      with:
+        name: ${{ matrix.os.fname }}_v${{ steps.semver.outputs.value }}
+        path: ${{ matrix.os.fname }}_v${{ steps.semver.outputs.value }}.zip
+        archive: false
+        overwrite: true
+
+  add-artefacts-to-release:
+    name: Add build artefacts to release
+
+    needs: build-artefacts
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+    - name: Pull current semver
+      id: semver
+      uses: SebRollen/toml-action@v1.2.0
+      with:
+        file: 'Cargo.toml'
+        field: 'package.version'
+    - name: Download artefacts
+      uses: actions/download-artifact@v8.0.1
+      with:
+        path: "./"
+        skip-decompress: true
+    - name: Create release
+      uses: softprops/action-gh-release@v3.0.3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        tag_name: v${{ steps.semver.outputs.value }}
+        files: "./**/*_v${{ steps.semver.outputs.value }}.zip"
+        fail_on_unmatched_files: true
+        generate_release_notes: true
+        make_latest: "true"
